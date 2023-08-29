@@ -9,10 +9,10 @@
 
 ### Current and future temperature data 
 3) Calculate ERA5 climatologies to debias with, upload to earth engine 
-	- 02_era5_climatology.R (00_cds_setup.R with cds user and key)
+	- 02_era5_climatology.R (00_setup.R with cds user and key)
 4) Download worldclim climatologies, upload to earth engine
 5) Calculate monthly temperature for relevant periods with debiased ERA5 using earth engine 
-	- 03_extract_temperature_gee_daily.R (00_setup.R with gee username
+	- 03_extract_temperature_gee_daily.R (00_setup.R with gee username) 
 5) Calculate temperature change in CMIP6 climatologies, upload to earth engine
 	- 04_select_gcm_climatologies.R -- select which climatologies to use
 	- 05_get_cmip6_climatologies.py calculate dT for selected climatologies and save as rasters

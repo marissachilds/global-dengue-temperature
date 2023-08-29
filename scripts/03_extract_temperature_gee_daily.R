@@ -8,7 +8,7 @@ library(rgee)
 library(ggplot2)
 library(dplyr)
 
-source("setup.R")
+source("00_setup.R")
 ee_Initialize(user = gee_user)
 download_loc <- "./data/from_gee/"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"

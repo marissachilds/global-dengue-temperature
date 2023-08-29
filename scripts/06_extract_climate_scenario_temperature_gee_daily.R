@@ -14,7 +14,8 @@ proj_end = "2020-01-01"
 
 scenarios_range = c(77)
 
-ee_Initialize(user = "mlc1132")
+source("00_setup.R")
+ee_Initialize(user = gee_user)
 download_loc <- "./data/from_gee_cmip6"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
 ee_worldclim_loc <- "users/lyberger/worldclim"

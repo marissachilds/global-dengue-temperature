@@ -1,0 +1,3 @@
+gee_user <- "YOUR EARTH ENGINE USER NAME HERE"
+cds_user <- "YOUR CDS USER NAME HERE"
+cds_key <- "YOUR CDS KEY HERE"

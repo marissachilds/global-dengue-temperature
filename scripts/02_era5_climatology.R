@@ -4,7 +4,7 @@ library(ecmwfr)
 library(raster)
 
 # load your copernicus climate data store key
-source("cds_setup.R")
+source("00_setup.R")
 wf_set_key(cds_user,
            cds_key, 
            "cds")
