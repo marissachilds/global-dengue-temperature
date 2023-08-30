@@ -1,7 +1,6 @@
-my_scratch
-scratch
-cds_setup.R
+*scratch
 *private*
 .Rproj.user
 data
 .DS_Store
+.Rhistory
