@@ -87,7 +87,7 @@ country_exports <- country_tasks %>%
   # add the number of splits for each country 
   mutate(n_split = case_when(country_shapefile %in% c("PHL", "BRA", "COL", 
                                                       "THA", "MEX", "IDN") ~ n_spat_large, 
-                             country_shapefile %in% c("PERU", "LKA", "VNM", 
+                             country_shapefile %in% c("PER", "LKA", "VNM", 
                                                       "NIC") ~ n_spat_mid, 
                              T ~ n_spat_small)) %>% 
   # replace start and end dates with intervals set above
