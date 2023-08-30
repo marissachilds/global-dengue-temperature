@@ -5,21 +5,35 @@ library(magrittr)
 library(tidyr)
 library(reticulate)
 library(rgee)
-# library(ggplot2)
 library(dplyr)
 
-proj_start =  "2013-01-01" # "1995-01-01"
-# actually need to adjust to be a few (lets just do 6) months before so we can get lags 
-proj_end = "2020-01-01" 
+proj_start =  "1994-07-01" # we want 1995, but start 6 months before so we can get lags 
+proj_end = "2015-01-01" 
 
-scenarios_range = c(77)
+# how many time chunks to cut up into 
+n_date_breaks = 20 #41 seems like too many
+# how many spatial chunks to break the space into 
+n_spat_large = 20 
+n_spat_mid = 8 #10
+n_spat_small = 2 #3 
 
-source("00_setup.R")
-ee_Initialize(user = gee_user)
+scenarios_range = c(1)
+
 download_loc <- "./data/from_gee_cmip6"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
 ee_worldclim_loc <- "users/lyberger/worldclim"
 ee_cmip6_dT_loc <- "users/marissachilds/cmip6_scenarios_dT_monthly"
+
+country_tasks = read.csv("./data/country_tasks.csv") %>% 
+  filter(country_shapefile != "CHN") %>% 
+  # PHL is the only one in my assets
+  mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) %>% 
+  # drop countries that are in the data set multiple times, keeping the instance with the later midyear
+  filter(mid_date == max(mid_date), 
+         .by = country_shapefile) 
+
+source("00_setup.R")
+ee_Initialize(user = gee_user)
 
 scenario_list = read.csv("./data/GCM_variant_scenarios_to_include.csv") %>% 
   filter(experiment_id != "historical") %>% 
@@ -28,7 +42,9 @@ scenario_list = read.csv("./data/GCM_variant_scenarios_to_include.csv") %>%
   rbind(data.frame(source_id = "era5", 
                    member_id = "0", 
                    experiment_id = "current", 
-                   asset_name = NA))
+                   asset_name = NA)) %>% 
+  filter(source_id != "MCM-UA-1-0")
+# MCM-UA-1-0 has weird stuff spatially, so lets not run for now
 
 worldclim_clim <- purrr::map(1:12, 
                              function(m){
@@ -46,31 +62,7 @@ era5_clim <- purrr::map(1:12,
                             ee$Image$set("month", m)
                         }) %>% ee$List()
 
-country_tasks = read.csv("country_tasks.csv") %>% View
-  # PHL is the only one in my assets
-  mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/"))
-
-# replace start and end dates with 5 year intervals for projections
-country_tasks %<>% 
-  select(-c(start_date, end_date)) %>% 
-  cross_join(data.frame(start_date = seq.Date(as.Date(proj_start, format = "%Y-%m-%d"),
-                                              as.Date(proj_end, format = "%Y-%m-%d"),
-                                              # by = "5 years"
-                                              length.out = 2)) %>% # might want to redo this somehow so that the 6 months at the start work nicely....
-               mutate(end_date = lead(start_date, 1)) %>% 
-               filter(!is.na(end_date)))
-
-# add the number of splits for each country 
-country_tasks %<>% mutate(n_split = case_when(country_shapefile %in% c("PHL", "BRA", "COL") ~ 10, 
-                                              T ~ 2))
-
-# drop countries that are in the data set multiple times, keeping the instance with the later midyear
-country_tasks %<>% 
-  filter(mid_date == max(mid_date), 
-         .by = country_shapefile)
-
 # country_tasks$country_shapefile %>% n_distinct
-
 era5 <- ee$ImageCollection("ECMWF/ERA5/DAILY")
 era5_proj <- era5$first()$projection()
 era5_scale <- era5_proj$nominalScale()$getInfo()
@@ -83,8 +75,26 @@ pop_scale <- pop_proj$nominalScale()$getInfo()
 # observed daily era5 values - era5 month climatology + worldclim month climatology + dT from cmip6
 # to get the nonlinear temp functions right, then we need to square, cube (and to be safe, ^4, ^5, ^6) 
 # temperature, then average each of those to the month then do the spatial averaging.
-country_exports <- country_tasks[1:2,] %>% 
+proj_date_seq <- seq.Date(as.Date(proj_start, format = "%Y-%m-%d"),
+                          as.Date(proj_end, format = "%Y-%m-%d"),
+                          by = "1 months") %>% 
+  {.[c(1, cut(1:length(.), n_date_breaks) %>% table %>% as.numeric %>% cumsum)]}
+
+
+t0 <- Sys.time()
+country_exports <- country_tasks %>% 
   rename(mid_year = mid_date) %>% 
+  # add the number of splits for each country 
+  mutate(n_split = case_when(country_shapefile %in% c("PHL", "BRA", "COL", 
+                                                      "THA", "MEX", "IDN") ~ n_spat_large, 
+                             country_shapefile %in% c("PERU", "LKA", "VNM", 
+                                                      "NIC") ~ n_spat_mid, 
+                             T ~ n_spat_small)) %>% 
+  # replace start and end dates with intervals set above
+  select(-c(start_date, end_date)) %>% 
+  cross_join(data.frame(start_date = proj_date_seq) %>% 
+               mutate(end_date = lead(start_date, 1)) %>% 
+               filter(!is.na(end_date))) %>% 
   cross_join(scenario_list %>% 
                magrittr::extract(scenarios_range,)) %>% 
   purrr::pmap(function(country_shapefile, 
@@ -99,14 +109,17 @@ country_exports <- country_tasks[1:2,] %>%
                        member_id, 
                        experiment_id, 
                        asset_name){
-    print(paste0("starting extractions for shapefile: ", country_shapefile, " for ", asset_name))
+    print(paste0("starting extractions for ", country_shapefile,
+                 " for ", asset_name, 
+                 ", from ", format(start_date, "%Y-%m-%d"), 
+                 " to ", format(end_date, "%Y-%m-%d")))
     
     shape <- ee$FeatureCollection(paste0(ee_loc, 
                                          ifelse(country_shapefile == "PHL", 
                                                 "PHL_palawan_simp", 
                                                 country_shapefile))) 
     n_feat <- shape$size()$getInfo()
-    
+
     shape <- shape$limit(n_feat, identifier_col)
     
     export_properties <- list(identifier_col,"year", "month", "mean", "property") 
@@ -146,7 +159,7 @@ country_exports <- country_tasks[1:2,] %>%
     tasks <- data.frame(i = 1:n_split, 
                         size = if(n_split > 1){cut(1:n_feat, n_split) %>% table %>% as.numeric} else{n_feat}) %>% 
       mutate(n_prev = cumsum(lag(size, n = 1, default = 0)))
-    print(tasks)
+    # print(tasks)
     
     tasks %>% 
       purrr::pmap(function(i, size, n_prev){
@@ -154,10 +167,10 @@ country_exports <- country_tasks[1:2,] %>%
         muni_col <- ee$FeatureCollection(shape$toList(size, n_prev))
         # Map$addLayer(muni_col)
         # print out which part of the shapefile is being operated on
-        print(paste0("units with codes/names from ", 
-                     muni_col$aggregate_min(identifier_col)$getInfo(), 
-                     " to ", 
-                     muni_col$aggregate_max(identifier_col)$getInfo()))
+        # print(paste0("units with codes/names from ", 
+        #              muni_col$aggregate_min(identifier_col)$getInfo(), 
+        #              " to ", 
+        #              muni_col$aggregate_max(identifier_col)$getInfo()))
         
         pop_density <- pop_orig %>% 
           ee$ImageCollection$filter(ee$Filter$calendarRange(mid_year, mid_year, "year")) %>%
@@ -198,7 +211,7 @@ country_exports <- country_tasks[1:2,] %>%
               ee$Image$reduceRegions(collection = muni_col,
                                      reducer = ee$Reducer$mean()$splitWeights(),
                                      crs = era5_proj,
-                                     scale = era5_scale) %>%
+                                     scale = 1000) %>%
               ee$FeatureCollection$map(function(f){
                 f$set("year", y, 
                       "month", m,
@@ -214,6 +227,7 @@ country_exports <- country_tasks[1:2,] %>%
         
         export_temp_task <- ee_table_to_drive(
           collection = unit_avgs,
+          folder = paste0("gee_temps_", asset_name),
           description = paste0(country_shapefile,
                                "_temp_cmpi6_", 
                                source_id, 
@@ -240,9 +254,10 @@ country_exports <- country_tasks[1:2,] %>%
 # but total may take longer if the tasks run sequentially rather than simultaneously
 retry::wait_until(
   expr = all(purrr::map_chr(unlist(country_exports), function(x) x$status()$state) == "COMPLETED"), 
-  interval = 120
+  interval = 60
 )
-beepr::beepr()
+t1 = Sys.time()
+t1 - t0
 
 # once all are completed, download to local
 unlist(country_exports) %>% 

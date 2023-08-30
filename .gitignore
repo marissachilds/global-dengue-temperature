@@ -2,3 +2,5 @@ my_scratch
 scratch
 cds_setup.R
 *private*
+.Rproj.user
+data
