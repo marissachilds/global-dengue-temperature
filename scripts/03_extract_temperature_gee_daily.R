@@ -1,18 +1,21 @@
-# COL 2 failed, and still need to do PHL once it uploads
-# why is COL failing when BRA succeeds despite 
-# what happens for dates outside the era5 range? --> just doesn't return anything
+# TO DO for this script:
+# this runs only from the old Rproj currently, need to figure out what settings are in there, and recreate them
+# redo chunking of shapefiles to match the way that the cmip6 extractions do it
+
 library(magrittr)
 library(tidyr)
 library(reticulate)
 library(rgee)
-library(ggplot2)
 library(dplyr)
 
-source("00_setup.R")
-ee_Initialize(user = gee_user)
 download_loc <- "./data/from_gee/"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
 ee_worldclim_loc <- "users/lyberger/worldclim"
+
+# check if the download location exists, otherwise, make it 
+if (!dir.exists(download_loc)){
+  dir.create(download_loc)
+}
 
 worldclim_clim <- purrr::map(1:12, 
                              function(m){
@@ -31,7 +34,7 @@ era5_clim <- purrr::map(1:12,
                         }) %>% ee$List()
 # eventually will need to figure out what to do with data from July 2020 and on, but lets not worry about that for now 
 
-country_tasks = read.csv("country_tasks.csv") %>% 
+country_tasks = read.csv("./data/country_tasks.csv") %>% 
   # PHL is the only one in my assets
   mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) 
 
@@ -66,6 +69,8 @@ country_tasks %<>%
                               T ~ end_date)) %>% 
   select(-id)
   
+source("./scripts/00_setup.R")
+ee_Initialize(user = gee_user) 
 
 era5 <- ee$ImageCollection("ECMWF/ERA5/DAILY")
 era5_proj <- era5$first()$projection()
@@ -79,10 +84,7 @@ pop_scale <- pop_proj$nominalScale()$getInfo()
 # observed daily era5 values - era5 month climatology + worldclim month climatology. 
 # to get the nonlinear temp functions right, then we need to square, cube (and to be safe, ^4, ^5, ^6) 
 # temperature, then average each of those to the month then do the spatial averaging.
-country_exports <- country_tasks[c(1, 4, 5, 26),] %>% 
-  # filter(country_shapefile == "PHL" & start_date == "1999-01-01") %>%
-  # mutate(end_date = "2000-01-01") %>% 
-  # mutate(start_date = ifelse(country_shapefile == "MEX", as.Date("2002-01-01"), start_date)) %>%
+country_exports <- country_tasks %>% 
   rename(mid_year = mid_date) %>%
   purrr::pmap(function(country_shapefile, 
                        identifier_col, 
