@@ -4,3 +4,4 @@ cds_setup.R
 *private*
 .Rproj.user
 data
+.DS_Store
