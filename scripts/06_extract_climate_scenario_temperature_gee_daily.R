@@ -11,13 +11,18 @@ proj_start =  "1994-07-01" # we want 1995, but start 6 months before so we can g
 proj_end = "2015-01-01" 
 
 # how many time chunks to cut up into 
-n_date_breaks = 20 #41 seems like too many
-# how many spatial chunks to break the space into 
-n_spat_large = 20 
-n_spat_mid = 8 #10
-n_spat_small = 2 #3 
+n_date_breaks = 2 # 12 # 20 might also be too many # trying 3 while we work with 1/4 time
+#41 seems like too many
 
-scenarios_range = c(1)
+# how many spatial chunks to break the space into (i think default to smaller, unless the pieces don't run)
+n_spat_xl = 64 # PHL # failed on 30 of 32 with 5.5 years of data 
+n_spat_l = 8 # "COL" "IDN" "BRA" "MEX"
+n_spat_m = 4 # THA "VEN" "VNM" "PER" "LKA" "NIC"
+n_spat_s = 2 # MYS PAN SLV BOL "DOM"  "CRI" 
+n_spat_xs = 1 # TWN "HND" "KHM" "LAO" 
+
+scenarios_range = c(74) # 1 - 74
+country_set = NA # if you want to limit to a set of countries 
 
 download_loc <- "./data/from_gee_cmip6"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
@@ -25,12 +30,17 @@ ee_worldclim_loc <- "users/lyberger/worldclim"
 ee_cmip6_dT_loc <- "users/marissachilds/cmip6_scenarios_dT_monthly"
 
 country_tasks = read.csv("./data/country_tasks.csv") %>% 
-  filter(country_shapefile != "CHN") %>% 
+  filter(country_shapefile != "CHN" & 
+           country_shapefile != "LKA1") %>% 
   # PHL is the only one in my assets
   mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) %>% 
   # drop countries that are in the data set multiple times, keeping the instance with the later midyear
   filter(mid_date == max(mid_date), 
          .by = country_shapefile) 
+
+if(!is.na(country_set)){
+  country_tasks = filter(country_shapefile %in% country_set)
+}
 
 source("00_setup.R")
 ee_Initialize(user = gee_user)
@@ -75,21 +85,26 @@ pop_scale <- pop_proj$nominalScale()$getInfo()
 # observed daily era5 values - era5 month climatology + worldclim month climatology + dT from cmip6
 # to get the nonlinear temp functions right, then we need to square, cube (and to be safe, ^4, ^5, ^6) 
 # temperature, then average each of those to the month then do the spatial averaging.
-proj_date_seq <- seq.Date(as.Date(proj_start, format = "%Y-%m-%d"),
-                          as.Date(proj_end, format = "%Y-%m-%d"),
-                          by = "1 months") %>% 
-  {.[c(1, cut(1:length(.), n_date_breaks) %>% table %>% as.numeric %>% cumsum)]}
-
+if(n_date_breaks == 1){
+  proj_date_seq <- c(as.Date(proj_start, format = "%Y-%m-%d"), 
+                     as.Date(proj_end, format = "%Y-%m-%d"))
+} else{
+  proj_date_seq <- seq.Date(as.Date(proj_start, format = "%Y-%m-%d"),
+                            as.Date(proj_end, format = "%Y-%m-%d"),
+                            by = "1 months") %>% 
+    {.[c(1, cut(1:length(.), n_date_breaks) %>% table %>% as.numeric %>% cumsum)]}
+}
 
 t0 <- Sys.time()
-country_exports <- country_tasks %>% 
+country_exports <- country_tasks %>%
   rename(mid_year = mid_date) %>% 
-  # add the number of splits for each country 
-  mutate(n_split = case_when(country_shapefile %in% c("PHL", "BRA", "COL", 
-                                                      "THA", "MEX", "IDN") ~ n_spat_large, 
+  # add the number of splits for each country  
+  mutate(n_split = case_when(country_shapefile %in% c("PHL") ~ n_spat_xl, 
+                             country_shapefile %in% c("COL", "IDN", "BRA", "MEX") ~ n_spat_l, 
                              country_shapefile %in% c("PER", "LKA", "VNM", 
-                                                      "NIC") ~ n_spat_mid, 
-                             T ~ n_spat_small)) %>% 
+                                                      "NIC", "THA", "VEN") ~ n_spat_m, 
+                             country_shapefile %in% c("TWN", "HND", "KHM", "LAO") ~ n_spat_xs,
+                             T ~ n_spat_s)) %>% 
   # replace start and end dates with intervals set above
   select(-c(start_date, end_date)) %>% 
   cross_join(data.frame(start_date = proj_date_seq) %>% 
@@ -253,7 +268,10 @@ country_exports <- country_tasks %>%
 # each individual task takes ~ 1-10 minutes, except CHN, BRA, MEX which take ~15-30 min 
 # but total may take longer if the tasks run sequentially rather than simultaneously
 retry::wait_until(
-  expr = all(purrr::map_chr(unlist(country_exports), function(x) x$status()$state) == "COMPLETED"), 
+  expr = all(purrr::map_chr(unlist(country_exports), 
+                            function(x) x$status()$state) %in% c("COMPLETED", 
+                                                                 "CANCEL_REQUESTED", 
+                                                                 "FAILED")), 
   interval = 60
 )
 t1 = Sys.time()
