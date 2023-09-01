@@ -1,6 +1,3 @@
-# COL 2 failed, and still need to do PHL once it uploads
-# why is COL failing when BRA succeeds despite 
-# what happens for dates outside the era5 range? --> just doesn't return anything
 library(magrittr)
 library(tidyr)
 library(reticulate)
@@ -11,17 +8,16 @@ proj_start =  "1994-07-01" # we want 1995, but start 6 months before so we can g
 proj_end = "2015-01-01" 
 
 # how many time chunks to cut up into 
-n_date_breaks = 2 # 12 # 20 might also be too many # trying 3 while we work with 1/4 time
-#41 seems like too many
+n_date_breaks = 2 
 
 # how many spatial chunks to break the space into (i think default to smaller, unless the pieces don't run)
-n_spat_xl = 64 # PHL # failed on 30 of 32 with 5.5 years of data 
-n_spat_l = 8 # "COL" "IDN" "BRA" "MEX"
-n_spat_m = 4 # THA "VEN" "VNM" "PER" "LKA" "NIC"
-n_spat_s = 2 # MYS PAN SLV BOL "DOM"  "CRI" 
-n_spat_xs = 1 # TWN "HND" "KHM" "LAO" 
+n_spat_xl = 64 # PHL
+n_spat_l = 8 # COL IDN BRA MEX
+n_spat_m = 4 # THA VEN VNM PER LKA NIC 
+n_spat_s = 2 # MYS PAN SLV BOL DOM CRI
+n_spat_xs = 1 # TWN HND KHM LAO
 
-scenarios_range = c(74) # 1 - 74
+scenarios_range = c(73) # 1 - 74
 country_set = NA # if you want to limit to a set of countries 
 
 download_loc <- "./data/from_gee_cmip6"
@@ -39,7 +35,7 @@ country_tasks = read.csv("./data/country_tasks.csv") %>%
          .by = country_shapefile) 
 
 if(!is.na(country_set)){
-  country_tasks = filter(country_shapefile %in% country_set)
+  country_tasks %<>% filter(country_shapefile %in% country_set)
 }
 
 source("00_setup.R")
@@ -95,7 +91,6 @@ if(n_date_breaks == 1){
     {.[c(1, cut(1:length(.), n_date_breaks) %>% table %>% as.numeric %>% cumsum)]}
 }
 
-t0 <- Sys.time()
 country_exports <- country_tasks %>%
   rename(mid_year = mid_date) %>% 
   # add the number of splits for each country  
@@ -202,16 +197,14 @@ country_exports <- country_tasks %>%
             ee$ImageCollection$filter(ee$Filter$eq("year", y)) %>%
             ee$ImageCollection$map(function(day_im){
               
-              # print(ee$String("b")$cat(format(ee$Number(m)))$getInfo())
-              # print(ee$Number(m)$getInfo())
               # debias with the right offset depending on the month
               debias_day = day_im$select("mean_2m_air_temperature") %>% 
                 ee$Image$subtract(era5_clim$get(ee$Number(m)$subtract(1))) %>%
                 ee$Image$add(worldclim_clim$get(ee$Number(m)$subtract(1))) %>%
                 ee$Image$add(scenario_dT_im$select(ee$Number(m)$subtract(1))) %>% 
-                # calculate ^2, ^3, ^4, ^5, ^6
-                ee$Image$pow(ee$Image$constant(as.list(1:6))) %>% 
-                ee$Image$rename(paste0("mean_2m_air_temperature_degree", 1:6)) %>% 
+                # calculate ^2, ^3, ^4, ^5
+                ee$Image$pow(ee$Image$constant(as.list(1:5))) %>% 
+                ee$Image$rename(paste0("mean_2m_air_temperature_degree", 1:5)) %>% 
                 # also add DTR and precip average bands
                 ee$Image$copyProperties(day_im, list("day", "month", "year", "system:time_start")) %>% 
                 return()
@@ -264,27 +257,14 @@ country_exports <- country_tasks %>%
     
   })
 
-# check the status
-# each individual task takes ~ 1-10 minutes, except CHN, BRA, MEX which take ~15-30 min 
-# but total may take longer if the tasks run sequentially rather than simultaneously
-retry::wait_until(
-  expr = all(purrr::map_chr(unlist(country_exports), 
-                            function(x) x$status()$state) %in% c("COMPLETED", 
-                                                                 "CANCEL_REQUESTED", 
-                                                                 "FAILED")), 
-  interval = 60
-)
-t1 = Sys.time()
-t1 - t0
-
 # once all are completed, download to local
-unlist(country_exports) %>% 
-  purrr::map(function(x){
-    temp = x$status()
-    name =  temp$description
-    if(x$status()$state == "COMPLETED"){
-      ee_drive_to_local(x, paste0(download_loc, "/", name, ".csv"))          
-    } else{
-      print(paste0(name, " has status ", temp$state))
-    }
-  })
+# unlist(country_exports) %>% 
+#   purrr::map(function(x){
+#     temp = x$status()
+#     name =  temp$description
+#     if(x$status()$state == "COMPLETED"){
+#       ee_drive_to_local(x, paste0(download_loc, "/", name, ".csv"))          
+#     } else{
+#       print(paste0(name, " has status ", temp$state))
+#     }
+#   })
