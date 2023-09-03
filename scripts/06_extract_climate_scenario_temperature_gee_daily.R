@@ -1,24 +1,30 @@
-library(magrittr)
 library(tidyr)
+library(dplyr)
+library(magrittr)
 library(reticulate)
 library(rgee)
-library(dplyr)
+
+source("00_setup.R")
+ee_Initialize(user = gee_user)
 
 proj_start =  "1994-07-01" # we want 1995, but start 6 months before so we can get lags 
 proj_end = "2015-01-01" 
 
 # how many time chunks to cut up into 
-n_date_breaks = 2 
+n_date_breaks = 2
 
 # how many spatial chunks to break the space into (i think default to smaller, unless the pieces don't run)
-n_spat_xl = 64 # PHL
-n_spat_l = 8 # COL IDN BRA MEX
+n_spat_xl = 24 # PHL, do it in 16 chunks + Sulu separately, since that seemed to make things fail before
+n_spat_l = 8 # COL IDN MEX BRA 
 n_spat_m = 4 # THA VEN VNM PER LKA NIC 
-n_spat_s = 2 # MYS PAN SLV BOL DOM CRI
-n_spat_xs = 1 # TWN HND KHM LAO
+n_spat_s = 2 # MYS PAN SLV BOL DOM CRI HND
+n_spat_xs = 1 # TWN KHM LAO 
 
-scenarios_range = c(73) # 1 - 74
-country_set = NA # if you want to limit to a set of countries 
+scenarios_range = c(1:74) # 1 - 74
+country_set = c() # if you want to limit to a set of countries. use c() to run all countries
+
+# for countries where some sub-country units are especially slow, run the slow ones separately and the rest as larger chunks
+separate_units = list(PHL = c("Sulu"))
 
 download_loc <- "./data/from_gee_cmip6"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
@@ -34,12 +40,9 @@ country_tasks = read.csv("./data/country_tasks.csv") %>%
   filter(mid_date == max(mid_date), 
          .by = country_shapefile) 
 
-if(!is.na(country_set)){
+if(length(country_set)>0){
   country_tasks %<>% filter(country_shapefile %in% country_set)
 }
-
-source("00_setup.R")
-ee_Initialize(user = gee_user)
 
 scenario_list = read.csv("./data/GCM_variant_scenarios_to_include.csv") %>% 
   filter(experiment_id != "historical") %>% 
@@ -98,7 +101,7 @@ country_exports <- country_tasks %>%
                              country_shapefile %in% c("COL", "IDN", "BRA", "MEX") ~ n_spat_l, 
                              country_shapefile %in% c("PER", "LKA", "VNM", 
                                                       "NIC", "THA", "VEN") ~ n_spat_m, 
-                             country_shapefile %in% c("TWN", "HND", "KHM", "LAO") ~ n_spat_xs,
+                             country_shapefile %in% c("TWN", "KHM", "LAO", "HND") ~ n_spat_xs,
                              T ~ n_spat_s)) %>% 
   # replace start and end dates with intervals set above
   select(-c(start_date, end_date)) %>% 
@@ -128,12 +131,10 @@ country_exports <- country_tasks %>%
                                          ifelse(country_shapefile == "PHL", 
                                                 "PHL_palawan_simp", 
                                                 country_shapefile))) 
-    n_feat <- shape$size()$getInfo()
-
-    shape <- shape$limit(n_feat, identifier_col)
+    
+    shape <- shape$sort(prop = identifier_col)
     
     export_properties <- list(identifier_col,"year", "month", "mean", "property") 
-    
     # based on the time range, identify the set of years and months we'll map over
     year_month_list = seq.Date(as.Date(start_date), as.Date(end_date), by = "month") %>% 
       head(-1) %>% # drop last excluded end date
@@ -166,21 +167,39 @@ country_exports <- country_tasks %>%
       scenario_dT_im = ee$Image(paste0(ee_cmip6_dT_loc, "/", asset_name))
     }
     
-    tasks <- data.frame(i = 1:n_split, 
-                        size = if(n_split > 1){cut(1:n_feat, n_split) %>% table %>% as.numeric} else{n_feat}) %>% 
-      mutate(n_prev = cumsum(lag(size, n = 1, default = 0)))
-    # print(tasks)
-    
+    # for some countries, there are a couple units that really slow things down or cause exports to fail
+    # we can run them separately so the rest can be in larger chunks
+    if(country_shapefile %in% names(separate_units)){
+      # make a filter to grab the separate units
+      unit_filter = ee$Filter$inList(identifier_col,
+                                     as.list(separate_units[[country_shapefile]]))
+      # how many remain without those units? 
+      shape_sub2 <- shape$filter(unit_filter$Not())
+      n_feat <- shape_sub2$size()$getInfo()
+      
+      shape = shape$filter(unit_filter)$merge(shape_sub2)
+      
+      tasks_sub1 <- data.frame(i = separate_units[[country_shapefile]], 
+                               size = rep(1, length(separate_units[[country_shapefile]]))) 
+      tasks_sub2 <- data.frame(i = 1:n_split, 
+                               size = if(n_split > 1){cut(1:n_feat, n_split) %>% table %>% as.numeric} else{n_feat}) 
+      
+      
+      tasks <- rbind(tasks_sub1, 
+            tasks_sub2) %>% 
+        mutate(n_prev = cumsum(lag(size, n = 1, default = 0)))
+      
+    } else{
+      n_feat <- shape$size()$getInfo()
+      tasks <- data.frame(i = 1:n_split, 
+                          size = if(n_split > 1){cut(1:n_feat, n_split) %>% table %>% as.numeric} else{n_feat}) %>% 
+        mutate(n_prev = cumsum(lag(size, n = 1, default = 0)))
+    }
+
     tasks %>% 
       purrr::pmap(function(i, size, n_prev){
-        # if necessary, subset to part of the shapefile
+        # subset shapefile
         muni_col <- ee$FeatureCollection(shape$toList(size, n_prev))
-        # Map$addLayer(muni_col)
-        # print out which part of the shapefile is being operated on
-        # print(paste0("units with codes/names from ", 
-        #              muni_col$aggregate_min(identifier_col)$getInfo(), 
-        #              " to ", 
-        #              muni_col$aggregate_max(identifier_col)$getInfo()))
         
         pop_density <- pop_orig %>% 
           ee$ImageCollection$filter(ee$Filter$calendarRange(mid_year, mid_year, "year")) %>%
@@ -257,14 +276,3 @@ country_exports <- country_tasks %>%
     
   })
 
-# once all are completed, download to local
-# unlist(country_exports) %>% 
-#   purrr::map(function(x){
-#     temp = x$status()
-#     name =  temp$description
-#     if(x$status()$state == "COMPLETED"){
-#       ee_drive_to_local(x, paste0(download_loc, "/", name, ".csv"))          
-#     } else{
-#       print(paste0(name, " has status ", temp$state))
-#     }
-#   })
