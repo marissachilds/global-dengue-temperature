@@ -14,17 +14,19 @@ proj_end = "2015-01-01"
 n_date_breaks = 2
 
 # how many spatial chunks to break the space into (i think default to smaller, unless the pieces don't run)
-n_spat_xl = 24 # PHL, do it in 16 chunks + Sulu separately, since that seemed to make things fail before
-n_spat_l = 8 # COL IDN MEX BRA 
+n_spat_xxl = 64 # PHL
+n_spat_xl = 16 # COL
+n_spat_l = 8 # IDN MEX BRA 
 n_spat_m = 4 # THA VEN VNM PER LKA NIC 
 n_spat_s = 2 # MYS PAN SLV BOL DOM CRI HND
 n_spat_xs = 1 # TWN KHM LAO 
 
 scenarios_range = c(1:74) # 1 - 74
 country_set = c() # if you want to limit to a set of countries. use c() to run all countries
+country_set_include = TRUE # do you want to include or exclude the country set above?
 
 # for countries where some sub-country units are especially slow, run the slow ones separately and the rest as larger chunks
-separate_units = list(PHL = c("Sulu"))
+separate_units = list(PHL = c("Sulu", "Palawan"))
 
 download_loc <- "./data/from_gee_cmip6"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
@@ -41,7 +43,7 @@ country_tasks = read.csv("./data/country_tasks.csv") %>%
          .by = country_shapefile) 
 
 if(length(country_set)>0){
-  country_tasks %<>% filter(country_shapefile %in% country_set)
+  country_tasks %<>% filter(country_shapefile %in% country_set == country_set_include)
 }
 
 scenario_list = read.csv("./data/GCM_variant_scenarios_to_include.csv") %>% 
@@ -97,8 +99,9 @@ if(n_date_breaks == 1){
 country_exports <- country_tasks %>%
   rename(mid_year = mid_date) %>% 
   # add the number of splits for each country  
-  mutate(n_split = case_when(country_shapefile %in% c("PHL") ~ n_spat_xl, 
-                             country_shapefile %in% c("COL", "IDN", "BRA", "MEX") ~ n_spat_l, 
+  mutate(n_split = case_when(country_shapefile %in% c("PHL") ~ n_spat_xxl, 
+                             country_shapefile %in% c("COL") ~ n_spat_xl,
+                             country_shapefile %in% c("IDN", "BRA", "MEX") ~ n_spat_l, 
                              country_shapefile %in% c("PER", "LKA", "VNM", 
                                                       "NIC", "THA", "VEN") ~ n_spat_m, 
                              country_shapefile %in% c("TWN", "KHM", "LAO", "HND") ~ n_spat_xs,
@@ -179,7 +182,7 @@ country_exports <- country_tasks %>%
       
       shape = shape$filter(unit_filter)$merge(shape_sub2)
       
-      tasks_sub1 <- data.frame(i = separate_units[[country_shapefile]], 
+      tasks_sub1 <- data.frame(i = sort(separate_units[[country_shapefile]]), 
                                size = rep(1, length(separate_units[[country_shapefile]]))) 
       tasks_sub2 <- data.frame(i = 1:n_split, 
                                size = if(n_split > 1){cut(1:n_feat, n_split) %>% table %>% as.numeric} else{n_feat}) 
