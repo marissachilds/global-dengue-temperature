@@ -14,7 +14,7 @@ proj_end = "2015-01-01"
 n_date_breaks = 2
 
 # how many spatial chunks to break the space into (i think default to smaller, unless the pieces don't run)
-n_spat_xxl = 64 # PHL
+n_spat_xxl = 24 # PHL
 n_spat_xl = 16 # COL
 n_spat_l = 8 # IDN MEX BRA 
 n_spat_m = 4 # THA VEN VNM PER LKA NIC 
