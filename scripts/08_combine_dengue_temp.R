@@ -32,8 +32,7 @@ dengue_temp <- list.files("./data/joined",
                   .cols = any_of(unique(gee_tasks$identifier_col))) %>%
       rename(dengue_cases = CountValue,
              year = Year) %>%
-      mutate(country = country,
-             year = ifelse(is.na(year),
+      mutate(year = ifelse(is.na(year),
                            str_sub(year_month, 1, 4) %>% as.numeric,
                            year),
              month = ifelse(is.na(month),
@@ -44,6 +43,18 @@ dengue_temp <- list.files("./data/joined",
                        "mean_2m_air_temperature",
                        "monthRange_2m_air_temperature",
                        "total_precipitation")))
+    # join with the full date range from gee_tasks 
+    full_panel <- seq.Date(time_range$start_date, time_range$end_date, by = "1 month") %>% 
+      head(-1) %>% 
+      expand.grid(dates = ., 
+                  id = unique(dengue$id)) %>% 
+      mutate(year = lubridate::year(dates),
+             month = lubridate::month(dates), 
+             year_month = year*100+month) %>% 
+      select(-dates)
+    dengue %<>% full_join(full_panel) %>% 
+      mutate(country = country)
+    
     # get full list of files with temperature data for that country
     temp_files = list.files("./data/from_gee", pattern = paste0(country, "_temp"), full.names = T) %>% 
       data.frame(file = .) %>% 
@@ -70,14 +81,28 @@ dengue_temp <- list.files("./data/joined",
       rename_with(.fn = function(x){"id"},
                   .cols = any_of(unique(gee_tasks$identifier_col))) %>% 
       rename(pop = sum)
+    
+    temp %<>% left_join(pop, by = "id")
+    
     # for some files, clean the id column in temp and pop data to make it joinable to the dengue data
     if(country == "BRA"){
       temp %<>% mutate(id = tolower(id) %>% str_sub(1, 8))
-      pop %<>% mutate(id = tolower(id) %>% str_sub(1, 8))
+      # pop %<>% mutate(id = tolower(id) %>% str_sub(1, 8))
       dengue %<>% filter(id != "br430000")
     } else if(country %in% c("DOM", "NIC", "PAN", "SLV", "VEN", "MEX")){
       temp %<>% mutate(id = stringi::stri_trans_general(id, id = "Latin-ASCII") %>% tolower)
-      pop %<>% mutate(id = stringi::stri_trans_general(id, id = "Latin-ASCII") %>% tolower)
+      # pop %<>% mutate(id = stringi::stri_trans_general(id, id = "Latin-ASCII") %>% tolower)
+    } else if(country == "IDN"){
+      # # kalimantan utara (was part of kalimantan timur per wikipedia)
+      temp %<>% mutate(id = case_match(id, 
+                                       "dki jakarta" ~ "jakarta", 
+                                       "daerah istimewa yogyakarta" ~ "yogyakarta", 
+                                       "kalimantan utara" ~ "kalimantan timur", 
+                                       .default = id))
+      temp %<>% summarise(across(!pop, 
+                                 ~ weighted.mean(.x, pop)),
+                          pop = sum(pop),
+                          .by = c(id, year, month))
     }
     
     # for NIC 2003, limit to pre 2005, which is when the second dataset starts 
@@ -85,15 +110,25 @@ dengue_temp <- list.files("./data/joined",
       dengue %<>% filter(year < 2005)
     }
     
+    # for IDN, also combine kalimantan timur and kalimantan utara, using pop-weights 
     # join it all together
     out = left_join(dengue, temp, by = c("id", "year", "month")) %>% 
-      left_join(pop, by = "id") %>% 
+      # left_join(pop, by = "id") %>% 
       mutate(mid_year = mid_year)
     return(out)
   }) 
 
 dengue_temp %<>% 
   filter(year <= 2019)
+
+dengue_temp %<>%   
+  rename_with(function(x){gsub("temperare", "temp", x)}, contains("temperare")) %>%
+  rename_with(function(x){gsub("temperature", "temp", x)}, contains("temperatare")) %>%
+  mutate(date = as.Date(paste0(year_month, "01"), format = "%Y%m%d")) %>%  
+  select(-year_month) %>% 
+  mutate(nonzero_dengue = any(dengue_cases > 0, na.rm = T),
+         .by = c(country, mid_year, id))
+  
 
 # check the joined data 
 # each unit-month has only one obs? 
