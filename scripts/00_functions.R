@@ -37,3 +37,37 @@ marginal_est_se <- function(mod,
              se = sqrt(diag(var))) %>% 
     return
 }
+
+
+response_est_se <- function(mod, coef_name_regex, 
+                        x_seq,
+                        vcov_type = "cluster", 
+                        debug = FALSE){
+  coef_names <- mod %>% 
+    coef %>% 
+    names
+  if(debug){print(coef_names)}
+  ind <- which(grepl(coef_name_regex, coef_names))  
+  if(debug){print(ind)}
+  degs <- stringr::str_extract(coef_names[ind], stringr::regex("degree\\d")) %>% 
+    gsub(pattern = "degree", replacement = "") %>% 
+    as.numeric %>% 
+    replace_na(1)
+  if(debug){print(degs)}
+  coef_vcv <- mod %>% 
+    vcov(vcov = vcov_type) %>% 
+    magrittr::extract(ind, ind)
+  # if(debug){print(coef_vcv)}
+  coef_est <- mod %>% 
+    coef %>% 
+    magrittr::extract(ind)
+  # if(debug){print(coef_est)}
+  est <- coef_est %*% (sapply(degs, function(x)  x_seq^x) %>% t) 
+  # if(debug){print(est)}
+  var <- (sapply(degs, function(x)  x_seq^x)) %*% coef_vcv %*% t(sapply(degs, function(x)  x_seq^x))
+  # if(debug){print(var)}
+  data.frame(x = x_seq, 
+             y = est[1,], 
+             se = sqrt(diag(var))) %>% 
+    return
+}
