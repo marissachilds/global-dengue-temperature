@@ -100,6 +100,7 @@ fig3_main <- het_marginals %>%
                         xmin = quantile(x, 0.01), 
                         .by = c(tercile, panel))) %>% 
   filter(x > xmin & x < xmax) %>%
+  mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>% 
   # mutate(panel = case_match(panel, 
   #                           "DTR" ~ "daily temperature range", 
   #                           "continent" ~ "continent",
@@ -115,7 +116,7 @@ fig3_main <- het_marginals %>%
               alpha = 0.5, color = NA) + 
   geom_line(aes(y = pmin(y + yoff, y_top + yoff))) + 
   geom_hline(yintercept = yoff) + 
-  geom_density(data = temp_by_tercile, 
+  geom_density(data = temp_by_tercile %>% mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)), 
                aes(y = hist_scale*after_stat(density)), 
                alpha = 0.5, trim = T) + 
   facet_wrap(~panel, labeller = as_labeller(c(sub_country_dengue = "Dengue incidence",
@@ -140,7 +141,7 @@ fig3_main <- het_marginals %>%
 # map over different covariates and add the inset map
 {fig3_main + 
     # add text labels for the lines in each panel
-    geom_text(data = data.frame(tercile = c("americas", "asia", 
+    geom_text(data = data.frame(tercile = c("Americas", "Asia", 
                                             "high", "mid", "low", 
                                             "high", "mid", "low", 
                                             "high", "mid", "low"), 
