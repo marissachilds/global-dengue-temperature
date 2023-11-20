@@ -4,7 +4,7 @@ library(magrittr)
 library(reticulate)
 library(rgee)
 
-source("00_setup.R")
+source("./scripts/00_setup.R")
 ee_Initialize(user = gee_user)
 
 proj_start =  "1994-07-01" # we want 1995, but start 6 months before so we can get lags 
@@ -21,7 +21,7 @@ n_spat_m = 4 # THA VEN VNM PER LKA NIC
 n_spat_s = 2 # MYS PAN SLV BOL DOM CRI HND
 n_spat_xs = 1 # TWN KHM LAO 
 
-scenarios_range = c(1:74) # 1 - 74
+scenarios_range = 2 #c(1:74) # 1 - 74
 country_set = c() # if you want to limit to a set of countries. use c() to run all countries
 country_set_include = TRUE # do you want to include or exclude the country set above?
 
@@ -54,6 +54,10 @@ scenario_list = read.csv("./data/GCM_variant_scenarios_to_include.csv") %>%
                    member_id = "0", 
                    experiment_id = "current", 
                    asset_name = NA)) %>% 
+  rbind(data.frame(source_id = "era5", 
+                   member_id = "1", 
+                   experiment_id = "plus_one", 
+                   asset_name = "era5_plus_one")) %>% 
   filter(source_id != "MCM-UA-1-0")
 # MCM-UA-1-0 has weird stuff spatially, so lets not run for now
 
@@ -166,7 +170,21 @@ country_exports <- country_tasks %>%
         ee$Image$addBands(ee$Image$constant(0)) %>% 
         ee$Image$addBands(ee$Image$constant(0)) %>% 
         ee$Image$addBands(ee$Image$constant(0))
-    } else{ 
+    } else if(asset_name == "era5_plus_one"){
+      print("scenario plus 1C")
+      scenario_dT_im = ee$Image$constant(1) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1)) %>% 
+        ee$Image$addBands(ee$Image$constant(1))
+    } else { 
       scenario_dT_im = ee$Image(paste0(ee_cmip6_dT_loc, "/", asset_name))
     }
     

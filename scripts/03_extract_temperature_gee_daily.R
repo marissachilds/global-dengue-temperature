@@ -8,6 +8,9 @@ library(reticulate)
 library(rgee)
 library(dplyr)
 
+source("./scripts/00_setup.R")
+ee_Initialize(user = gee_user) 
+
 download_loc <- "./data/from_gee/"
 ee_era5_clim_loc <- "users/marissachilds/era5_monthly_climatology"
 ee_worldclim_loc <- "users/lyberger/worldclim"
@@ -34,7 +37,7 @@ era5_clim <- purrr::map(1:12,
                         }) %>% ee$List()
 # eventually will need to figure out what to do with data from July 2020 and on, but lets not worry about that for now 
 
-country_tasks = read.csv("./data/country_tasks.csv") %>% 
+country_tasks = read.csv("./ref_tables/country_tasks.csv") %>% 
   # PHL is the only one in my assets
   mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) 
 
@@ -69,9 +72,6 @@ country_tasks %<>%
                               T ~ end_date)) %>% 
   select(-id)
   
-source("./scripts/00_setup.R")
-ee_Initialize(user = gee_user) 
-
 era5 <- ee$ImageCollection("ECMWF/ERA5/DAILY")
 era5_proj <- era5$first()$projection()
 era5_scale <- era5_proj$nominalScale()$getInfo()
