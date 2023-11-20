@@ -21,7 +21,7 @@ n_spat_m = 4 # THA VEN VNM PER LKA NIC
 n_spat_s = 2 # MYS PAN SLV BOL DOM CRI HND
 n_spat_xs = 1 # TWN KHM LAO 
 
-scenarios_range = 2 #c(1:74) # 1 - 74
+scenarios_range = c(1:74) # 1 - 74
 country_set = c() # if you want to limit to a set of countries. use c() to run all countries
 country_set_include = TRUE # do you want to include or exclude the country set above?
 
