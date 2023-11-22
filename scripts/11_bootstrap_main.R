@@ -2,16 +2,11 @@
 library(dplyr)
 library(magrittr)
 library(fixest)
-library(future.apply)
 library(foreach)
 library(doParallel)
 
 # set options 
 n_boot <- 1000 # try 10 for testing, 1000 for full boostrap
-
-# this might not be right... but lets try having fixest use 1 thread per model, 
-# so each worker/thread works on a different bootstrap
-
 
 if(Sys.getenv('SLURM_JOB_ID') != ""){
   registerDoParallel(cores = Sys.getenv("SLURM_NTASKS_PER_NODE"))

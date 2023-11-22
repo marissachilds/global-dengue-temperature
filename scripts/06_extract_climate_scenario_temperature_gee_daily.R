@@ -207,7 +207,7 @@ country_exports <- country_tasks %>%
       
       
       tasks <- rbind(tasks_sub1, 
-            tasks_sub2) %>% 
+                     tasks_sub2) %>% 
         mutate(n_prev = cumsum(lag(size, n = 1, default = 0)))
       
     } else{
