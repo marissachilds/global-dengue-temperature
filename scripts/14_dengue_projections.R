@@ -38,9 +38,35 @@ model_lags <- grep("temp", colnames(boot_coef), value = T) %>%
   gsub(".*_lag", "", .) %>% unique %>% as.numeric
 temp_inds <- which(grepl("temp", colnames(boot_coef)))
 
+# load dengue data to figure out which units have non-zero dengue during the study period 
+dengue_units <- readRDS("./data/dengue_temp_full.rds") %>% 
+  group_by(country, mid_year, id) %>% 
+  summarise(total_dengue = sum(dengue_cases, na.rm = T)) %>% 
+  ungroup %>% 
+  # drop LKA1, filter to the max mid_year for each country 
+  filter(country != "LKA1") %>% 
+  group_by(country) %>% 
+  filter(mid_year == max(mid_year)) %>% 
+  ungroup %>% 
+  select(-mid_year)
+
 # load population data
-pop <- readRDS("./data/all_pops.rds") %>% 
-  filter(country != "CHN")
+pop <- readRDS("./data/all_pop2015.rds") 
+
+# join dengue incidence to population data to be used in the country averages
+pop %<>% 
+  mutate(id_join = case_when(country %in% c("DOM", "NIC", "PAN", "SLV", "VEN", "MEX") ~ stringi::stri_trans_general(id, id = "Latin-ASCII"), 
+                             country == "BRA" ~ str_sub(id, 1, 8), 
+                             country == "IDN" ~ case_when(id == "Dki Jakarta" ~ "Jakarta", 
+                                                          id == "Daerah Istimewa Yogyakarta" ~ "Yogyakarta", 
+                                                          # kalimantan utara gets assigned the dengue cases from timur, which is okay since we only care about whether dengue is > 0
+                                                          id == "Kalimantan Utara" ~ "Kalimantan Timur", 
+                                                          T ~ id), 
+                             T ~ id) %>% tolower) %>% 
+  filter(id_join != "br430000" & id != "[unknown]") %>% 
+  full_join(dengue_units %>% rename(id_join = id), 
+            multiple = "warning")  %>% 
+  mutate(nonzero_dengue = 1*(total_dengue > 0))
 
 # load observed data 
 clim_obs <- readRDS("./data/dT_combined/scenarios_era_current_current.gz") %>% 
@@ -48,7 +74,7 @@ clim_obs <- readRDS("./data/dT_combined/scenarios_era_current_current.gz") %>%
   select(-ends_with("degree5"), -ends_with("degree4")) %>% 
   as.data.table()
 # clim_obs = clim_obs[country == cur_country,]
-print(nrow(clim_obs))
+# print(nrow(clim_obs))
 clim_obs = clim_obs[order(country, id, year, month),]  
 # add lags 1 - 3
 temp_cols <- grep("temp", colnames(clim_obs), value=TRUE)
@@ -104,10 +130,10 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
     # convert to % change in dengue
     exp %>% 
     subtract(1) 
-  print(dim(dengue_diff))
+  # print(dim(dengue_diff))
   T_diff <- map(dengue_est, ~.x[["T_est"]] - clim_obs$mean_2m_air_temp_degree1) %>% 
     reduce(cbind)
-  print(dim(T_diff))
+  # print(dim(T_diff))
   
   # calculate summary stats ----
   print(paste0("calculating summary statistics for scenario ", scenario, "----------"))
@@ -190,19 +216,17 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
   # then do pop-weighted average to get country estimate for each bootstrap
   # join the population data
   country_dengue = unit_dengue[pop %>% 
-                                 select(-mid_year) %>% 
                                  as.data.table, 
                                on = c("country", "id")] 
   
   # calculate pop-weighted avg pct change in each country for each bootstrap
-  country_dengue = country_dengue[, .(mean = weighted.mean(mean, sum)), by = .(country, variable)]
+  country_dengue = country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)]
   
   country_T = unit_T[pop %>% 
-                       select(-mid_year) %>% 
                        as.data.table, 
                      on = c("country", "id")]
   # calculate pop-weighted avg dT in each country for each bootstrap
-  country_T = country_T[, .(mean = weighted.mean(mean, sum)), by = .(country, variable)]
+  country_T = country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)]
   
   full_join(country_dengue[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>% 
               cbind(name = paste0("pct_change_dengue_q_", quant_vals)) %>% 
@@ -262,19 +286,17 @@ purrr::pmap(compare_scenarios,
               # then do pop-weighted average to get country estimate for each bootstrap
               # join the population data
               country_dengue = unit_dengue[pop %>%
-                                             select(-mid_year) %>%
                                              as.data.table,
                                            on = c("country", "id")]
 
               # calculate pop-weighted avg pct change in each country for each bootstrap
-              country_dengue = country_dengue[, .(mean = weighted.mean(mean, sum)), by = .(country, variable)]
+              country_dengue = country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)]
               
               country_T = unit_T[pop %>% 
-                                   select(-mid_year) %>% 
                                    as.data.table, 
                                  on = c("country", "id")]
               # calculate pop-weighted avg dT in each country for each bootstrap
-              country_T = country_T[, .(mean = weighted.mean(mean, sum)), by = .(country, variable)]
+              country_T = country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)]
               
               # country_dengue[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>%
               #   cbind(name = paste0("q_", quant_vals)) %>%

@@ -3,7 +3,7 @@
 #SBATCH  -p bigmem
 #SBATCH --nodes=1              
 #SBATCH --ntasks-per-node=1     
-#SBATCH --mem=360GB 
+#SBATCH --mem=256GB 
 #SBATCH --time=2:00:00
 #SBATCH --mail-type=ALL
 
