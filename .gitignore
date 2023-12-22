@@ -1,4 +1,7 @@
 *scratch
+data
+output
+figures
 *private*
 .Rproj.user
 .DS_Store
