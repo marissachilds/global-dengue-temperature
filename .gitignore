@@ -4,5 +4,6 @@ output
 figures
 *private*
 .Rproj.user
+*.Rproj
 .DS_Store
 .Rhistory
