@@ -2,8 +2,8 @@ library(tidyverse)
 library(magrittr)
 library(sf)
 
-source("../scripts/00_functions.R")
-continent_colors <- c("darkgreen", "black")
+source("./scripts/00_functions.R")
+continent_colors <- c("#466c4b","#90719f")
 other_colors <- c("#ff6020", "#376795", "#ffba42")# "#ffd07f")
 het_ests <- readRDS("./output/mod_ests/het_models_coef_vcv.rds")
 covars_vec <- c("continent", "sub_country_dengue", "health_expenditure", "pop_per_km2")
@@ -14,7 +14,6 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds")
 
 dengue_temp %<>% left_join(unit_covar %>% select(country, id, mid_year, ends_with("tercile"))) %>% 
   filter(!is.na(dengue_cases) & !is.na(pop))
-
 
 shp <- readRDS("./data/shapefiles_plotting.rds")
 continents <- shp$continents 
@@ -39,7 +38,8 @@ test <- full_join(all_shapes,
                   unit_covar %>% 
                     filter(mid_year == max(mid_year), 
                            .by = c(country, id)) %>% 
-                    select(country, id, ends_with("tercile")))
+                    select(country, id, ends_with("tercile"), sub_country_dengue)) %>% 
+  filter(sub_country_dengue > 0)
 
 # het_marginal <- purrr::imap(het_ests[1], 
 #             function(x, name){
@@ -75,6 +75,7 @@ het_marginals %>%
 covars_vec %>% 
   purrr::map(function(cov_name){
     dengue_temp %>% 
+      filter(nonzero_dengue) %>% 
       transmute(x = mean_2m_air_temp_degree1, 
                 tercile = !!sym(paste0(cov_name, "_tercile")),
                 panel = cov_name) %>% 
@@ -88,7 +89,7 @@ covars_vec %>%
 
 yoff <- 0.75
 hist_scale = 2.05
-y_top <- 1.62
+y_top <- 1.65
 
 fig3_main <- het_marginals %>% 
   separate_wider_delim(tercile, names = c("panel", "tercile"), 
@@ -147,13 +148,13 @@ fig3_main <- het_marginals %>%
                                             "high", "mid", "low"), 
                                 panel = rep(covars_vec, times = c(2, 3, 3, 3)), 
                                 x = c(17, 18, 
-                                      18, 17, 20,
-                                      15, 25.8, 21,
+                                      15.25, 17, 20,
+                                      15, 16.3, 21,
                                       14, 15, 19), 
                                 y = c(1.1, -0.3, 
-                                      1.64, 0.85, 0.27,
-                                      1.25, 0.5, 0.2, 
-                                      1.55, 0.84, 0.37)), 
+                                      1.5, 0.87, 0.27,
+                                      1.25, 0.59, 0.2, 
+                                      1.52, 0.84, 0.37)), 
               aes(x = x, y = y + yoff, label = tercile, 
                   color = tercile, fontface = "bold"), 
               inherit.aes = FALSE) + 
