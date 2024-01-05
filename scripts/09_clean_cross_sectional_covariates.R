@@ -18,7 +18,7 @@ gee_tasks <- read.csv("../ref_tables/country_tasks.csv") %>%
            add(as.difftime(1, units = "days")))
 
 # country-wide covariates for heterogeneity 
-covar <- read.csv("./data/covariates1.csv") #%>% 
+covar <- read.csv("./data/covariates1.csv") 
   
 # areas for population density 
 areas <- list.files("./data/from_gee", pattern = "area", full.names = T) %>% 
@@ -76,18 +76,24 @@ gbd_est <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>%
 
 # sub_country_dengue 
 sub_country_dengue <- dengue_temp %>% 
-  filter(!is.na(dengue_cases)) %>% 
-  summarise(total_dengue = sum(dengue_cases), 
+  summarize(total_dengue = sum(dengue_cases, na.rm = TRUE),  
+            nobs = sum(!is.na(dengue_cases)),
             pop = unique(pop),
-            .by = c(country, mid_year, id)) %>%  
+            .by = c(country, id, mid_year, year)) %>%
+  # drop years with less than 12 obs 
+  filter(max(nobs) == 12, 
+         .by = c(country, mid_year, year)) %>% 
+  summarise(total_dengue = sum(total_dengue, na.rm = T), 
+            pop = unique(pop),
+            .by = c(country, id, mid_year)) %>% 
   mutate(pct_dengue = total_dengue/sum(total_dengue), 
          country_pop = sum(pop),
          .by = c(country, mid_year)) %>% 
   mutate(country_join = ifelse(country == "LKA1", "LKA", country)) %>% 
   left_join(gbd_est %>% 
-              select(country_join = country_code, dengue = val)) %>% 
-  mutate(sub_country_dengue = dengue * country_pop * pct_dengue / pop, 
-         sub_country_dengue_tercile = tercile_from_vec(sub_country_dengue))
+              select(country_join = country_code, country_dengue = val)) %>% 
+  mutate(sub_country_dengue = country_dengue * country_pop * pct_dengue / pop, 
+         sub_country_dengue_tercile = tercile_from_vec(ifelse(sub_country_dengue == 0, NA, sub_country_dengue)))
   
 # country dengue = "true" total cases / total population 
 # sub country dengue wants to be "true" unit cases / unit population 
@@ -97,6 +103,8 @@ sub_country_dengue <- dengue_temp %>%
 # obs unit cases / unit pop * ("true" country inc * country pop / obs total country cases)
 # so level of adjustment depends on how far off GBD estimates are from the country surveillance totals 
 # maybe worth plotting just to check and understand whats happening? 
+
+
 
 # combine all the data and convert to terciles ---- 
 # start with population 
@@ -109,14 +117,17 @@ unit_covar <- pops %>%
                                     "asia"),
          # add a country column for joining on that combines LKA and LKA1 
          country_join = ifelse(country == "LKA1", "LKA", country)) %>% 
+  # join in sub-country dengue calculated above
+  left_join(sub_country_dengue %>% 
+              select(country, id, mid_year, sub_country_dengue, 
+                     sub_country_dengue_tercile)) %>% 
   # join in area 
   left_join(areas, 
             by = c("country", "id")) %>% 
   # calculate population density 
   mutate(pop_per_km2 = pop/area_km2, 
          # calculate terciles of area, population, and pop density 
-         across(c(pop, pop_per_km2, area_km2), 
-                list(tercile = tercile_from_vec))) %>% 
+         pop_per_km2_tercile = tercile_from_vec(ifelse(sub_country_dengue == 0, NA, pop_per_km2))) %>% 
   # join in health expenditure, calculating terciles at the country level
   left_join(covar %>% 
               select(country_join = Country.Code, health_expenditure = CHE2010) %>% 
@@ -124,11 +135,8 @@ unit_covar <- pops %>%
   # join in dengue incidence from the GBD 
   left_join(gbd_est %>% 
               select(country_join = country_code, dengue = val) %>% 
-              mutate(dengue_tercile = tercile_from_vec(dengue))) %>% 
-  # join in sub-country dengue calculated above
-  left_join(sub_country_dengue %>% 
-              select(country, id, mid_year, sub_country_dengue, 
-                     sub_country_dengue_tercile))
+              mutate(dengue_tercile = tercile_from_vec(dengue))) 
+  
 
 saveRDS(unit_covar, "./data/unit_covariates.rds")
 

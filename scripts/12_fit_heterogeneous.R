@@ -3,8 +3,7 @@ library(tidyverse)
 library(magrittr)
 library(fixest)
 
-unit_covar <- readRDS("./data/unit_covariates.rds") %>% 
-  select(-pop_tercile, -area_km2_tercile)
+unit_covar <- readRDS("./data/unit_covariates.rds") 
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") 
 
 dengue_temp %<>% left_join(unit_covar %>% select(country, id, mid_year, ends_with("tercile")))
