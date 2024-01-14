@@ -11,7 +11,7 @@ tercile_from_vec <- function(x){
 }
 
 # country tasks for some general information
-gee_tasks <- read.csv("../ref_tables/country_tasks.csv") %>% 
+gee_tasks <- read.csv("./ref_tables/country_tasks.csv") %>% 
   mutate(start_date = as.Date(start_date, format = "%m/%d/%y"), 
          # end_date_inclusive = end_date, 
          end_date = as.Date(end_date, format = "%m/%d/%y") %>% 
@@ -76,6 +76,7 @@ gbd_est <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>%
 
 # sub_country_dengue 
 sub_country_dengue <- dengue_temp %>% 
+  # calculate annual totals 
   summarize(total_dengue = sum(dengue_cases, na.rm = TRUE),  
             nobs = sum(!is.na(dengue_cases)),
             pop = unique(pop),
@@ -83,7 +84,9 @@ sub_country_dengue <- dengue_temp %>%
   # drop years with less than 12 obs 
   filter(max(nobs) == 12, 
          .by = c(country, mid_year, year)) %>% 
+  # average/sum over annual totals
   summarise(total_dengue = sum(total_dengue, na.rm = T), 
+            avg_annual_inc = mean(total_dengue/pop, na.rm = T),
             pop = unique(pop),
             .by = c(country, id, mid_year)) %>% 
   mutate(pct_dengue = total_dengue/sum(total_dengue), 
@@ -92,7 +95,8 @@ sub_country_dengue <- dengue_temp %>%
   mutate(country_join = ifelse(country == "LKA1", "LKA", country)) %>% 
   left_join(gbd_est %>% 
               select(country_join = country_code, country_dengue = val)) %>% 
-  mutate(sub_country_dengue = country_dengue * country_pop * pct_dengue / pop, 
+  mutate(empirical_dengue_incidence = avg_annual_inc, 
+         sub_country_dengue = country_dengue * country_pop * pct_dengue / pop, 
          sub_country_dengue_tercile = tercile_from_vec(ifelse(sub_country_dengue == 0, NA, sub_country_dengue)))
   
 # country dengue = "true" total cases / total population 
@@ -119,7 +123,9 @@ unit_covar <- pops %>%
          country_join = ifelse(country == "LKA1", "LKA", country)) %>% 
   # join in sub-country dengue calculated above
   left_join(sub_country_dengue %>% 
-              select(country, id, mid_year, sub_country_dengue, 
+              select(country, id, mid_year, 
+                     empirical_dengue_incidence, 
+                     sub_country_dengue, 
                      sub_country_dengue_tercile)) %>% 
   # join in area 
   left_join(areas, 
