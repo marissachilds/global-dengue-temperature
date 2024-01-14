@@ -10,34 +10,36 @@ library(Rcpp)
 # ...for quantiles across values in rows
 library(matrixStats)
 # ...for running in parallel
-library(foreach)
-library(doParallel)
+# library(foreach)
+# library(doParallel)
+library(purrr)
 
 if(Sys.getenv('SLURM_JOB_ID') != "" & length(commandArgs(trailingOnly = TRUE)) > 0){
-  print(paste0("Running with ", Sys.getenv("SLURM_NTASKS_PER_NODE"), " cores"))
-  registerDoParallel(cores = Sys.getenv("SLURM_NTASKS_PER_NODE"))
+  # print(paste0("Running with ", Sys.getenv("SLURM_NTASKS_PER_NODE"), " cores"))
+  # registerDoParallel(cores = Sys.getenv("SLURM_NTASKS_PER_NODE"))
   args = commandArgs(trailingOnly = T)
   print(paste0("using ", args[1], " for bootstrapped coefficients"))
   boot_coef_file = args[1]
-  mod_name = gsub(".*/", "", boot_coef_file) %>% 
+  mod_name = gsub(".*/", "", boot_coef_file) %>%
     gsub("_coef_boot.*", "", .)
   print(paste0("saving output with model name ", mod_name))
 }else{
-  registerDoParallel(cores = 1)
+  # registerDoParallel(cores = 1)
   boot_coef_file = "./output/mod_ests/main_coef_boot1000.rds"
   mod_name = gsub(".*/", "", boot_coef_file) %>% 
     gsub("_coef_boot.*", "", .)
 }
 
-sourceCpp("./scripts/mat_mult.cpp")
+sourceCpp("./scripts/mat_mult.cpp", verbose = FALSE, echo = FALSE)
 
 # set some parameters ----
 # cur_country = "BRA"
-all_scenarios = c("ssp126", "ssp245", "ssp370", "plusone", "hist-nat")
+all_scenarios = c("ssp126", "ssp245", "ssp370", "hist-nat", "plusone")
+# all_scenarios = c("ssp126", "ssp370")
 # "base" is the one scenario we're calculating the % change from
 compare_scenarios = data.frame(base = c("ssp126"), 
                                change = c("ssp370")) 
-which_boot_ind <- 1:50 # 25 bootstraps took ~75 GB (call it 100 to be safe) of memory, but 100 bootstraps failed with 360 GB
+which_boot_ind <- 1:100 # 25 bootstraps took ~75 GB, 50 took ~160, previously 100 bootstraps failed with 360 GB
 quant_vals <- c(0, 0.01, 0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975, 0.99, 1)
 
 # load bootstrap coefficients 
@@ -73,8 +75,9 @@ dengue_units <- readRDS("./data/unit_covariates.rds") %>%
   filter(mid_year == max(mid_year)) %>% 
   ungroup %>% 
   select(-mid_year) %>% 
-  mutate(main = 1) %>% 
-  select(country, id, sub_country_dengue, tercile_var = all_of(tercile_var))
+  mutate(main = 1, 
+         gbd_scaled_dengue_incidence = sub_country_dengue/10000) %>% 
+  select(country, id, empirical_dengue_incidence, gbd_scaled_dengue_incidence, tercile_var = all_of(tercile_var))
 
 # load population data
 pop <- readRDS("./data/all_pop2015.rds") 
@@ -92,7 +95,7 @@ pop %<>%
   filter(id_join != "br430000" & id != "[unknown]") %>% 
   full_join(dengue_units %>% rename(id_join = id), 
             multiple = "warning")  %>% 
-  mutate(nonzero_dengue = 1*(sub_country_dengue > 0))
+  mutate(nonzero_dengue = 1*(empirical_dengue_incidence > 0))
 
 # load observed data 
 clim_obs <- readRDS("./data/dT_combined/scenarios_era_current_current.gz") %>% 
@@ -127,7 +130,8 @@ print("finished current climate estimates")
 
 # now loop through the listed scenarios
 
-all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
+all_scenario_dengue <- map(all_scenarios, function(scenario){
+  # foreach(scenario = all_scenarios) %dopar% { # c("ssp126", "ssp370")) %dopar% { #
   print(paste0("starting on scenario ", scenario, "----------"))
   dengue_est <- list.files("./data/dT_combined", 
                             pattern = scenario, 
@@ -147,7 +151,7 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
                                     on = c("country", "id")] 
       clim_scenario = clim_scenario[order(tercile_var, country, id, year, month)]
       # add lags 1 - 3
-      temp_cols <- grep("temp", colnames(clim_scenario), value=TRUE)
+      temp_cols <- grep("temp", colnames(clim_scenario), value = TRUE)
       for ( i in model_lags ) { 
         lag_names <- paste(temp_cols, "_lag", i, sep = "")
         clim_scenario[,(lag_names) := lapply(.SD, shift, i, type = "lag"),
@@ -180,46 +184,33 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
   # calculate summary stats ----
   print(paste0("calculating summary statistics for scenario ", scenario, "----------"))
   
-  # 1) for each time point, quantiles of coef*scenario_temp - coef*obs temp
-  # calculate quantiles for each row (which is a unit-month)
-  # unit_month_dengue %<>% apply(1, function(x) quantile(x, quant_vals))
-  # unit_month_dengue <- dengue_diff %>% rowQuantiles(probs=quant_vals) %>%
-  #   set_colnames(paste0("q_", quant_vals)) %>%
-  #   as.data.table
-  # 
-  # # similarly, loop through and grab T_diff, cbind together, calculate quantiles for each row (although with only 21 scenario, there will be fewer quantiles )
-  # if(scenario != "plusone"){
-  #   unit_month_T <- T_diff %>%
-  #     rowQuantiles(probs=quant_vals) %>%
-  #     set_colnames(paste0("q_", quant_vals)) %>%
-  #     as.data.table
-  # } else{ unit_month_T <- T_diff %>%
-  #   as.matrix(ncol = 1) %>%
-  #   set_colnames("q_0.5") %>%
-  #   as.data.table}
-  # 
-  # # cbind the dengue quantiles and T quantiles with unit-year-month identifiers
-  # cbind(clim_obs %>%
-  #         select(country, id, year, month),
-  #       unit_month_T %>% rename_with(function(x) paste0("dTemp_", x)),
-  #       unit_month_dengue %>% rename_with(function(x) paste0("pct_change_dengue_", x))) %>%
-  #   saveRDS(paste0("./output/projection_ests/unit_month_changes_maxBoot", max(which_boot_ind),
-  #                  "_scenario_", scenario, ".rds"),
-  #           compress = T)
-  # print("unit-month quantiles saved")
-  # rm(unit_month_T, unit_month_dengue)
-  
   # 2) for each unit, average over time to get that place's pct change in dengue
+  # first join on the country information, and pivot longer (just dropping year and month info)
+  # dengue_diff %>% 
+  #   as.data.frame() %>% 
+  #   str() 
+  # clim_obs %>%
+  #   select(country, id) %>% 
+  #   str 
+  
   unit_dengue = dengue_diff %>% 
     as.data.frame() %>% 
     cbind(clim_obs %>%
             select(country, id)) %>% 
-    as.data.table() %>% 
-    melt(id.vars = c("id", "country")) 
-  # print(str(unit_dengue))
+    as.data.table() 
+  # try calculating the mean across all V, then melting 
+  dengue_cols <- grep("^V", colnames(unit_dengue), value = T)
+  unit_dengue = unit_dengue[, lapply(.SD, mean), .(country, id), .SDcols = dengue_cols] 
+  unit_dengue = melt(unit_dengue, id.vars = c("id", "country"), value.name = "mean")
+  # country_dengue[, lapply(.SD, function(x) quantile(x, quant_vals, na.rm = T)), .(country), .SDcols = change_cols] %>% 
+  # str(unit_dengue)
+  # unit_dengue = melt(unit_dengue, 
+  #                    id.vars = c("id", "country")) 
+  # with this old approach, we get a memory error that manifest as a "negative length vectors not allowed" error message
   
-  # calculate the average within bootstrap
-  unit_dengue = unit_dengue[,.(mean=mean(value)),.(country, id, variable)]
+  
+  # calculate the average within bootstrap x GCM
+  # unit_dengue = unit_dengue[,.(mean=mean(value)),.(country, id, variable)]
   # print(str(unit_dengue))
   
   print("calculated unit average dengue")
@@ -245,7 +236,7 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
     dcast(country + id ~ name, 
           value.var = "quant")
   
-  # then get quantiles across each bootstrap
+  # merge temperature and dengue
   unit_dengue_quant[unit_T_quant, on = c("country", "id")] %>% 
     saveRDS(paste0("./output/projection_ests/unit_changes_maxBoot", max(which_boot_ind),
                    "_mod_", mod_name,
@@ -257,20 +248,35 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
   
   # 3) for each country, use average over time for each unit from above
   # then do pop-weighted average to get country estimate for each bootstrap
-  # join the population data
+  # join the population data (the sum variable in the pop data is the total population)
   country_dengue = unit_dengue[pop %>% 
                                  as.data.table, 
                                on = c("country", "id")] 
   
   # calculate pop-weighted avg pct change in each country for each bootstrap
-  country_dengue = rbind(country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)],
-                         country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(variable)] %>% 
-                           mutate(country = "overall_pop_weight"), 
-                         country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)] %>% 
-                           group_by(variable) %>% 
-                           summarise(mean = mean(mean)) %>% 
-                           ungroup %>% 
-                           mutate(country = "overall_country_avg")) 
+  # also calculate cases change, using both gbd and empirical dengue where 
+  # total cases change (as sum of unit % dengue change * incidence in that place * pop) in each country for each bootstrap
+  country_dengue = rbind(country_dengue[, 
+                                        .(pct_inc_dengue_change = weighted.mean(mean, sum*nonzero_dengue), 
+                                          raw_case_dengue_change = sum(ifelse(nonzero_dengue, mean*empirical_dengue_incidence*sum, 0)), # ifelse should just handle the NAs in places with no dengue
+                                          gbd_scaled_case_dengue_change = sum(ifelse(nonzero_dengue, mean*gbd_scaled_dengue_incidence*sum, 0))), 
+                                        by = .(country, variable)],
+                         country_dengue[, 
+                                        .(pct_inc_dengue_change = weighted.mean(mean, sum*nonzero_dengue), 
+                                          raw_case_dengue_change = sum(ifelse(nonzero_dengue, mean*empirical_dengue_incidence*sum, 0)), # ifelse should just handle the NAs in places with no dengue
+                                          gbd_scaled_case_dengue_change = sum(ifelse(nonzero_dengue, mean*gbd_scaled_dengue_incidence*sum, 0))), 
+                                        by = .(variable)] %>% 
+                           mutate(country = "overall_pop_weight")) 
+  # drop average of country values because it doesn't really make sense for cases
+                         # country_dengue[, 
+                         #                .(inc_change = weighted.mean(mean, sum*nonzero_dengue), 
+                         #                  raw_case_change = sum(ifelse(nonzero_dengue, mean*empirical_dengue_incidence*sum, 0)), # ifelse should just handle the NAs in places with no dengue
+                         #                  gbd_scaled_case_change = sum(ifelse(nonzero_dengue, mean*gbd_scaled_dengue_incidence*sum, 0))), 
+                         #                by = .(country, variable)] %>% 
+                         #   group_by(variable) %>% 
+                         #   summarise(across(contains("change"), mean)) %>% 
+                         #   ungroup %>% 
+                         #   mutate(country = "overall_country_avg")) 
                          
   country_T = unit_T[pop %>% 
                        as.data.table, 
@@ -278,17 +284,13 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
   # calculate pop-weighted avg dT in each country for each bootstrap
   country_T = rbind(country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)],
                     country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(variable)] %>% 
-                      mutate(country = "overall_pop_weight"), 
-                    country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)] %>% 
-                      group_by(variable) %>% 
-                      summarise(mean = mean(mean)) %>% 
-                      ungroup %>% 
-                      mutate(country = "overall_country_avg")) 
+                      mutate(country = "overall_pop_weight")) 
     
-  full_join(country_dengue[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>% 
-              cbind(name = paste0("pct_change_dengue_q_", quant_vals)) %>% 
+  change_cols = c("pct_inc_dengue_change", "raw_case_dengue_change", "gbd_scaled_case_dengue_change")
+  full_join(country_dengue[, lapply(.SD, function(x) quantile(x, quant_vals, na.rm = T)), .(country), .SDcols = change_cols] %>% 
+              cbind(name = paste0("q_", quant_vals)) %>% 
               dcast(country ~ name, 
-                    value.var = "quant"), 
+                    value.var = change_cols), 
             country_T[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>% 
               cbind(name = paste0("dTemp_q_", quant_vals)) %>% 
               dcast(country ~ name, 
@@ -306,7 +308,8 @@ all_scenario_dengue <- foreach(scenario = all_scenarios) %dopar% {
   } else{ out <- NA}
   print(paste0("finished with scenario ", scenario, "----------"))
   return(out)
-}  
+})
+
 rm(dengue_obs)
 all_scenario_dengue %<>% set_names(all_scenarios)
 
@@ -321,13 +324,22 @@ purrr::pmap(compare_scenarios,
 
               T_diff <- subtract(all_scenario_dengue[[change]]$T_est,
                                  all_scenario_dengue[[base]]$T_est)
-              unit_dengue = dengue_diff %>%
-                as.data.frame() %>%
+              unit_dengue = dengue_diff %>% 
+                as.data.frame() %>% 
                 cbind(clim_obs %>%
-                        select(country, id)) %>%
-                as.data.table() %>%
-                melt(id.vars = c("id", "country"))
-              unit_dengue = unit_dengue[,.(mean=mean(value)),.(country, id, variable)]
+                        select(country, id)) %>% 
+                as.data.table() 
+              # try calculating the mean across all V, then melting 
+              dengue_cols <- grep("^V", colnames(unit_dengue), value = T)
+              unit_dengue = unit_dengue[, lapply(.SD, mean), .(country, id), .SDcols = dengue_cols] 
+              unit_dengue = melt(unit_dengue, id.vars = c("id", "country"), value.name = "mean")
+              # unit_dengue = dengue_diff %>%
+              #   as.data.frame() %>%
+              #   cbind(clim_obs %>%
+              #           select(country, id)) %>%
+              #   as.data.table() %>%
+              #   melt(id.vars = c("id", "country"))
+              # unit_dengue = unit_dengue[,.(mean=mean(value)),.(country, id, variable)]
 
               # also calculate mean temperature change
               unit_T <- T_diff %>%
@@ -347,37 +359,31 @@ purrr::pmap(compare_scenarios,
                                              as.data.table,
                                            on = c("country", "id")]
 
-              # calculate pop-weighted avg pct change in each country for each bootstrap
-              country_dengue = rbind(country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)],
-                                     country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(variable)] %>% 
-                                       mutate(country = "overall_pop_weight"), 
-                                     country_dengue[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)] %>% 
-                                       group_by(variable) %>% 
-                                       summarise(mean = mean(mean)) %>% 
-                                       ungroup %>% 
-                                       mutate(country = "overall_country_avg")) 
+              country_dengue = rbind(country_dengue[, 
+                                                   .(pct_inc_dengue_change = weighted.mean(mean, sum*nonzero_dengue), 
+                                                     raw_case_dengue_change = sum(ifelse(nonzero_dengue, mean*empirical_dengue_incidence*sum, 0)), # ifelse should just handle the NAs in places with no dengue
+                                                     gbd_scaled_case_dengue_change = sum(ifelse(nonzero_dengue, mean*gbd_scaled_dengue_incidence*sum, 0))), 
+                                                   by = .(country, variable)],
+                                    country_dengue[, 
+                                                   .(pct_inc_dengue_change = weighted.mean(mean, sum*nonzero_dengue), 
+                                                     raw_case_dengue_change = sum(ifelse(nonzero_dengue, mean*empirical_dengue_incidence*sum, 0)), # ifelse should just handle the NAs in places with no dengue
+                                                     gbd_scaled_case_dengue_change = sum(ifelse(nonzero_dengue, mean*gbd_scaled_dengue_incidence*sum, 0))), 
+                                                   by = .(variable)] %>% 
+                                      mutate(country = "overall_pop_weight")) 
               
               country_T = unit_T[pop %>% 
                                    as.data.table, 
                                  on = c("country", "id")]
               # calculate pop-weighted avg dT in each country for each bootstrap
-              country_T = country_T = rbind(country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)],
-                                            country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(variable)] %>% 
-                                              mutate(country = "overall_pop_weight"), 
-                                            country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)] %>% 
-                                              group_by(variable) %>% 
-                                              summarise(mean = mean(mean)) %>% 
-                                              ungroup %>% 
-                                              mutate(country = "overall_country_avg")) 
+              country_T = rbind(country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(country, variable)],
+                                country_T[, .(mean = weighted.mean(mean, sum*nonzero_dengue)), by = .(variable)] %>% 
+                                  mutate(country = "overall_pop_weight")) 
               
-              # country_dengue[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>%
-              #   cbind(name = paste0("q_", quant_vals)) %>%
-              #   dcast(country ~ name,
-              #         value.var = "quant") %>%
-              full_join(country_dengue[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>% 
-                          cbind(name = paste0("pct_change_dengue_q_", quant_vals)) %>% 
+              change_cols = c("pct_inc_dengue_change", "raw_case_dengue_change", "gbd_scaled_case_dengue_change")
+              full_join(country_dengue[, lapply(.SD, function(x) quantile(x, quant_vals, na.rm = T)), .(country), .SDcols = change_cols] %>% 
+                          cbind(name = paste0("q_", quant_vals)) %>% 
                           dcast(country ~ name, 
-                                value.var = "quant"), 
+                                value.var = change_cols), 
                         country_T[,.(quant = quantile(mean, quant_vals, na.rm = T)), .(country)] %>% 
                           cbind(name = paste0("dTemp_q_", quant_vals)) %>% 
                           dcast(country ~ name, 
@@ -392,6 +398,34 @@ purrr::pmap(compare_scenarios,
 
 
 # SCRATCH -----------------  
+# 1) for each time point, quantiles of coef*scenario_temp - coef*obs temp
+# calculate quantiles for each row (which is a unit-month)
+# unit_month_dengue %<>% apply(1, function(x) quantile(x, quant_vals))
+# unit_month_dengue <- dengue_diff %>% rowQuantiles(probs=quant_vals) %>%
+#   set_colnames(paste0("q_", quant_vals)) %>%
+#   as.data.table
+# 
+# # similarly, loop through and grab T_diff, cbind together, calculate quantiles for each row (although with only 21 scenario, there will be fewer quantiles )
+# if(scenario != "plusone"){
+#   unit_month_T <- T_diff %>%
+#     rowQuantiles(probs=quant_vals) %>%
+#     set_colnames(paste0("q_", quant_vals)) %>%
+#     as.data.table
+# } else{ unit_month_T <- T_diff %>%
+#   as.matrix(ncol = 1) %>%
+#   set_colnames("q_0.5") %>%
+#   as.data.table}
+# 
+# # cbind the dengue quantiles and T quantiles with unit-year-month identifiers
+# cbind(clim_obs %>%
+#         select(country, id, year, month),
+#       unit_month_T %>% rename_with(function(x) paste0("dTemp_", x)),
+#       unit_month_dengue %>% rename_with(function(x) paste0("pct_change_dengue_", x))) %>%
+#   saveRDS(paste0("./output/projection_ests/unit_month_changes_maxBoot", max(which_boot_ind),
+#                  "_scenario_", scenario, ".rds"),
+#           compress = T)
+# print("unit-month quantiles saved")
+# rm(unit_month_T, unit_month_dengue)
   # clim_scenario %>% 
   #   select(country, id, year, month) %>% 
   #   mutate(T_diff = clim_obs$mean_2m_air_temp_degree1 - clim_scenario$mean_2m_air_temp_degree1)
