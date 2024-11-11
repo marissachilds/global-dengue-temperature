@@ -2,6 +2,7 @@
 data
 output
 figures
+documents
 *private*
 .Rproj.user
 *.Rproj
