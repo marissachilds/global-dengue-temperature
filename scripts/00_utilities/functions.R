@@ -54,9 +54,11 @@ response_est_se <- function(mod, coef_name_regex,
     as.numeric %>%
     replace_na(1)
   if(debug){print(degs)}
-  coef_vcv <- mod %>%
-    vcov(vcov = vcov_type) %>%
-    magrittr::extract(ind, ind)
+  if(!is.na(vcov_type)){
+    coef_vcv <- mod %>%
+      vcov(vcov = vcov_type) %>%
+      magrittr::extract(ind, ind)
+  }
   # if(debug){print(coef_vcv)}
   coef_est <- mod %>%
     coef %>%
@@ -64,11 +66,15 @@ response_est_se <- function(mod, coef_name_regex,
   # if(debug){print(coef_est)}
   est <- coef_est %*% (sapply(degs, function(x)  x_seq^x) %>% t)
   # if(debug){print(est)}
-  var <- (sapply(degs, function(x)  x_seq^x)) %*% coef_vcv %*% t(sapply(degs, function(x)  x_seq^x))
+  if(!is.na(vcov_type)){
+    var <- (sapply(degs, function(x)  x_seq^x)) %*% coef_vcv %*% t(sapply(degs, function(x)  x_seq^x))
+    se <- sqrt(diag(var))
+  } else{se <- NA}
+  
   # if(debug){print(var)}
   data.frame(x = x_seq,
              y = est[1,],
-             se = sqrt(diag(var))) %>%
+             se = se) %>%
     return
 }
 
