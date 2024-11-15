@@ -76,9 +76,11 @@ covars_vec %>%
   purrr::map(function(cov_name){
     dengue_temp %>% 
       filter(nonzero_dengue) %>% 
-      transmute(x = mean_2m_air_temp_degree1, 
+      transmute(country = country, 
+                x = mean_2m_air_temp_degree1, 
                 tercile = !!sym(paste0(cov_name, "_tercile")),
                 panel = cov_name) %>% 
+      filter(!is.na(tercile)) %>% # this just currently drops Taiwan in the health expenditure reg since it has no value 
       # filter(x > quantile(x, 0.01) & 
       #          x < quantile(x, 0.99), 
       #        .by = tercile) %>% 

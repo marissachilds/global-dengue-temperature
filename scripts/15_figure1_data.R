@@ -1,6 +1,5 @@
 # TO DO 
 # update shapefile to have LKA, not LKA1
-# pick y axis label 
 # better color scheme...
 # show values or ranges on bi legend
 # lines going from countries to their time series? maybe do it in post processing 
@@ -19,7 +18,6 @@ countries <- shp$countries
 all_shapes <- shp$admin
 rm(shp)
 
-# this step with shapefile merging is slow
 all_shapes %<>% filter(country != "LKA1") %>%
   # clean up the ids on the shapefiles to match the ones in the dengue-temperature data, then merge
   mutate(id = tolower(id),
@@ -30,17 +28,15 @@ all_shapes %<>% filter(country != "LKA1") %>%
                          "dki jakarta" ~ "jakarta", 
                          "daerah istimewa yogyakarta" ~ "yogyakarta", 
                          "kalimantan utara" ~ "kalimantan timur", 
-                         .default = id)) #%>% 
-  # summarise, to merge some of the units 
-  # 7470 (-1 bc of IDN) (- 63 bc PAN) (-1 bc of BRA) --> 7405 # the projections have 7424, where is this mismatch coming from? 
-  # summarise(n = n(), 
-  #           .by = c(country, id))
+                         .default = id)) 
 test <- all_shapes %>% st_simplify(dTolerance = 5000)
 
 # saveRDS(all_shapes, "./data/all_shapes_merged.rds")
 
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>% 
   mutate(dengue_inc = dengue_cases/pop) 
+
+unit_covar <- readRDS("./data/unit_covariates.rds") 
 
 unit_avgs <- dengue_temp %>% 
   # calculate annual averages
@@ -59,7 +55,17 @@ unit_avgs <- dengue_temp %>%
   # for each country, filter to the latest mid year, recoding LKA1 = LKA 
   mutate(country = ifelse(country == "LKA1", "LKA", country)) %>%
   filter(mid_year == max(mid_year), 
-         .by = country)
+         .by = country) %>% 
+  left_join(unit_covar %>% 
+              select(country, id, mid_year, gbd_scaled_dengue = sub_country_dengue))
+
+# full_join(unit_covar %>% 
+#             mutate(country = ifelse(country == "LKA1", "LKA", country)) %>%
+#             filter(mid_year == max(mid_year),
+#                   .by = country) %>% 
+#             select(country, id, mid_year, sub_country_dengue),
+#           unit_avgs %>% select(-pop, -nyear)) %>% 
+#   View
 
 country_ts <- dengue_temp %>% 
   summarise(cases = sum(dengue_cases, na.rm = T), 
@@ -75,14 +81,23 @@ country_ts <- dengue_temp %>%
 #   "#e34938", "#ffcf71", "#447997", 
 #   "#f4b6af", "#ffecc6", "#afcbdb")
 
-bipal <- c("#8a1f13", "#777777", "#264354",
-           "#e34938", "#9d9d9d", "#447997",
-           "#f4b6af", "#d9d9d9", "#afcbdb")  %>%
-  rev %>%
-  set_names(expand.grid(as.numeric(1:3),
-                        as.numeric(1:3)) %>%
-              unite("out", Var1, Var2, sep = "-") %>%
-              pull(out))
+# bipal <- c(
+#   # "#c3b3d8", "#e6e6e6", "#ffcc80", "#7b67ab", "#bfbfbf", "#f35926", "#240d5e", "#7f7f7f", "#b30000") %>% rev %>%
+#   # "#f3f3f3", "#f3e6b3", "#f3b300", "#b4d3e1", "#b3b3b3", "#b36600", "#509dc2",  "#376387", "#000000") %>% rev %>%
+#   # "#8a1f13", "#c2ae00", "#264354",
+#   # "#e34938", "#f2e466", "#447997",
+#   # "#f4b6af", "#fff7b3", "#afcbdb")  %>%
+#   # "#003701", "#00595d","#0077ae",
+#   # "#644e02","#6a7e68", "#70a8c2",
+#   # "#bc6202","#c89e71", "#d3d3d3") %>%
+#   "#8a1f13", "#777777", "#264354",
+#   "#e34938", "#9d9d9d", "#447997",
+#   "#f4b6af", "#d9d9d9", "#afcbdb")  %>%
+#   rev %>%
+#   set_names(expand.grid(as.numeric(1:3),
+#                         as.numeric(1:3)) %>%
+#               unite("out", Var1, Var2, sep = "-") %>%
+#               pull(out))
             
 # make own quantiles that are pop-weithed using DescTools::Quantile
 finalPlot <- ggdraw() +
@@ -92,22 +107,39 @@ finalPlot <- ggdraw() +
               geom_sf(data = test %>% 
                         mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
                         left_join(unit_avgs, by = join_by(country, id)) %>% 
-                        bi_class(x = mean_temp, y = mean_inc, 
+                        bi_class(x = mean_temp, 
+                                 y = mean_inc, 
                                  style = "quantile", dim = 3), 
                       mapping = aes(fill = bi_class), 
                       color = NA, size = 0.01, show.legend = FALSE) + 
-              # geom_sf(data = countries, color = "grey90", 
-              #         lwd = 0.37, fill = NA) +
               geom_sf(data = countries, color = "grey10", 
                       lwd = 0.32, fill = NA) +
-              bi_scale_fill(pal = "DkViolet", # bipal, #
+              annotate("text", x = -Inf, y = Inf, 
+                       label = paste0(dengue_temp %>% 
+                                        mutate(country = ifelse(country == "LKA1", "LKA", country)) %>%
+                                        pull(country) %>% n_distinct(), " countries\n",
+                                      unit_avgs %>% 
+                                        filter(country != "LKA1" & gbd_scaled_dengue > 0) %>% 
+                                        select(country, id) %>% n_distinct, " administrative units\n",
+                                      dengue_temp %>% 
+                                        filter(!is.na(dengue_inc)) %>% 
+                                        left_join(unit_avgs %>% filter(country != "LKA1" & gbd_scaled_dengue > 0) %>% 
+                                                    transmute(country, id, include = T)) %>% 
+                                        filter(include) %>% 
+                                        nrow %>% 
+                                        divide_by(1e6) %>% round(2), "M unit-months"), 
+                       size = 2.5, hjust = 0, vjust = 1) + 
+              # geom_sf(data = countries, color = "grey90", 
+              #         lwd = 0.37, fill = NA) +
+              bi_scale_fill(pal =  "DkViolet", #bipal, #"DkViolet", #bipal
+                            # best color options: DkViolet, my palette, orange-blue-green, orange-grey-purple, blue-yellow-black
                             dim = 3, na.value="white") + 
               ylim(-34, 33) + 
               xlim(-92, 137) +
               theme_void() +
               theme(panel.background = element_rect("white", NA)), 
             0, 0, 1, 1) +
-  draw_plot(bi_legend(pal = "DkViolet", # bipal, # 
+  draw_plot(bi_legend(pal = "DkViolet", #"DkViolet", #bipal, # 
                       dim = 3,
                       xlab = "Higher temperature ",
                       ylab = "Higher dengue  ",
