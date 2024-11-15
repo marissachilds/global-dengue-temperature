@@ -19,7 +19,7 @@ scenario_dict = {"historical": ref_period | {"req": True},
                  "ssp245": fut_period | {"req": True}, 
                  "ssp370": fut_period | {"req": True}}
 
-clim_output_path = "/Users/marissachilds/Research/dengue_temperature_global/data/climate_scenarios_dT_monthly/" 
+clim_output_path = "./data/climate_scenarios_dT_monthly/" 
  
 # load package
 import intake
@@ -74,7 +74,7 @@ req_scenarios = list(dict(filter(check_scenario_req, scenario_dict.items())).key
 url = "https://cmip6-pds.s3.amazonaws.com/pangeo-cmip6.json" 
 cat_full = intake.open_esm_datastore(url)
 
-cmip6_ds_included = pd.read_csv("~/Research/dengue_temperature_global/data/GCM_variant_scenarios_to_include.csv")
+cmip6_ds_included = pd.read_csv("./data/GCM_variant_scenarios_to_include.csv")
 
 # take the existing catalog data frame, and use the limited set from above as the df
 cat_sub = cat_full
