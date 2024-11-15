@@ -5,7 +5,7 @@
 ### Shapefiles and population data 
 
 1) Download all shapefiles and simplify PHL shapefile 
-	- Manual downloads (ADD SOURCES)
+	- Manual downloads 
 	- 00_setup/phl_shp_debug.R
 2) Upload all to earth engine assets (manual)
 3) Transform shapefiles for plotting centered around Pacific Ocean 
