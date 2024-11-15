@@ -19,48 +19,8 @@ dengue_temp %<>%
   filter(!is.na(dengue_inc))
 unit_covar <- readRDS("./data/unit_covariates.rds")
 
-# demean incidence in mexico
-# dengue_temp %>% filter(country == "MEX") %>% 
-#   filter(sum(dengue_inc) > 0, 
-#          .by = c(countryFE, id)) %>%
-#   mutate(season_avg = median(dengue_inc), 
-#          .by = c(id, month)) %>% 
-#   mutate(season = (season_avg >= quantile(season_avg, 0.9) & season_avg > 0), 
-#          .by = id) %>% 
-#   {cbind(select(., country, id, year, month, dengue_inc, season, temp = mean_2m_air_temp_degree1_lag1),
-#          dengue_anom = fepois(dengue_inc ~ 
-#                                 total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
-#                                 countryFE^id + countryFE^year + countryFE^month, 
-#                               weights =~pop, # population weight
-#                               data = .) %>% 
-#            extract2("residuals"), 
-#          dengue_est = fepois(dengue_inc ~ 
-#                                 total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
-#                                 countryFE^id + countryFE^year + countryFE^month, 
-#                               weights =~pop, # population weight
-#                               data = .) %>% 
-#            extract2("fitted.values"), 
-#          temp_anom = feols(mean_2m_air_temp_degree1_lag1 ~ 
-#                              total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
-#                              countryFE^id + countryFE^year + countryFE^month, 
-#                            weights =~pop, # population weight
-#                            data = .) %>% 
-#            extract2("residuals"))} -> anoms
-# 
-# anoms %>% 
-#   filter(dengue_inc > 0) %>%
-#   mutate(pct_change = (dengue_inc - dengue_anom)/dengue_inc) %>%
-#   filter(season) %>% 
-#   ggplot(aes(y = dengue_anom, x = temp_anom)) + 
-#   geom_hline(yintercept = 0) + 
-#   geom_point(alpha = 0.5) + 
-#   geom_smooth(se = FALSE, method = "lm") + 
-#   facet_wrap(~(temp > 25), scales = "free") + 
-#   scale_y_continuous(trans = "pseudo_log") +
-#   theme_classic()
-# 
 
-# first identify whithin each country, which places have average temps < 25 and > 27 year round 
+# first identify within each country, which places have average temps < 25 and > 25 year round 
 unit_categories <- dengue_temp %>% 
   filter(country %in% c("MEX", "BRA", "VNM", "THA")) %>% 
   filter(mid_year == max(mid_year), .by = country) %>% 
@@ -137,12 +97,3 @@ dengue_temp %>%
             strip.text = element_text(face = "bold", size = 12))} %>% 
   ggsave(filename = "./figures/figureSX_anomalies_comparison.png", 
          width = 9, height = 7)
-
-# where do we have a location with temps consistently > 27? 
-# dengue_temp %>% 
-#   summarise(mean_temp = mean(mean_2m_air_temp_degree1), 
-#             .by = c(country, mid_year, id, month)) %>% 
-#   summarise(min_temp = min(mean_temp), 
-#             max_temp = max(mean_temp),
-#             .by = c(country, mid_year, id)) %>% 
-#   View

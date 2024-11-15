@@ -1,7 +1,9 @@
 library(rgee)
-ee_Initialize(user = "mlc1132") 
 library(tidyverse)
 library(magrittr)
+
+source("./scripts/00_utilities/setup.R")
+ee_Initialize(user = gee_user) 
 
 gbd_est <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>% 
   filter(measure == "Incidence") %>% 
@@ -93,8 +95,6 @@ era5_annual$addBands(pop_density) %>%
                          crs = era5_proj,
                          scale = 5000) -> country_temps # era5 scale ~27km is too big for some of the island locations
 
-# country_temps$first()$propertyNames()$getInfo()
-
 export_task <- ee_table_to_drive(
   collection = country_temps,
   description = "endemic_dengue_country_temperatures",
@@ -105,10 +105,3 @@ export_task <- ee_table_to_drive(
 export_task$start()
 export_task$status()$state
 ee_drive_to_local(export_task, paste0("./data/", export_task$status()$description, ".csv")) 
-
-read.csv(paste0("./data/", export_task$status()$description, ".csv")) %>% 
-  View
-# era5_all$filter(ee$Filter$eq("month", 1))$aggregate_array("system:index")$getInfo()
-    # ee$ImageCollection$aggregate_array("system:index"))$getInfo()
-    # ee$ImageCollection$size())$getInfo()
-

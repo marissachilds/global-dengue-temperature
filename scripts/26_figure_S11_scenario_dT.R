@@ -1,11 +1,6 @@
 library(magrittr)
 library(tidyverse)
 
-# list.files("./data/dT_combined", 
-#            full.names = T,
-#            pattern = "ssp126")[1] %>% 
-#   readRDS() %>% 
-#   str
 unit_covar <- readRDS("./data/unit_covariates.rds") 
 list.files("./data/dT_combined",
            full.names = T,
@@ -30,7 +25,6 @@ test <- purrr::map(c("hist-nat", "ssp126", "ssp245", "ssp370"),
                      readRDS(paste0("./output/projection_ests/unit_changes_maxBoot100_mod_main_scenario_", x, ".rds")) %>% 
                        mutate(scenario = x)}) %>% 
   list_rbind() %>% 
-  # select(country, id, starts_with("dTemp")) %>% 
   full_join(unit_avg_temp) %>% 
   mutate(id_join = case_when(country %in% c("DOM", "NIC", "PAN", "SLV", "VEN", "MEX") ~ stringi::stri_trans_general(id, id = "Latin-ASCII"), 
                              country == "BRA" ~ str_sub(id, 1, 8), 
@@ -72,9 +66,6 @@ test %>%
       geom_hline(data = select(., scenario, scenario_mean) %>% unique,
                  aes(yintercept = scenario_mean), 
                  color = "red", linetype = "dashed") +
-      # geom_text(data = , 
-      #            aes(x = -Inf, y = Inf, label = paste0("mean temperature change = ", round(mean, 2), "C")), 
-      #           color = "red", vjust = 1, hjust = 0) + 
       facet_wrap(~paste0(scenario, 
                          ifelse(grepl("hist", scenario), " (1995 - 2014)", " (2040-2059)"),
                          "\nΔT = ", round(scenario_mean, 2), "°C"), 
@@ -86,14 +77,3 @@ test %>%
             strip.text = element_text(face = "bold"))} %>% 
   ggsave(filename = "./figures/figureSX_dT_scenario.png", 
          width = 7, height = 5)
-
-# test %>% 
-#   filter(empirical_dengue_incidence > 0) %>% 
-#   {ggplot(., aes(x = pct_change_dengue_q_0.5,
-#                  y = dTemp_q_0.5)) + 
-#       geom_point(alpha = 0.5) + 
-#       # geom_linerange(aes(ymax = dTemp_q_1, ymin = dTemp_q_0), 
-#       #                alpha = 0.05) + 
-#       geom_hline(data = summarise(., mean = mean(dTemp_q_0.5)), 
-#                  aes(yintercept = mean), color = "red", linetype = "dashed") + 
-#       theme_classic()}

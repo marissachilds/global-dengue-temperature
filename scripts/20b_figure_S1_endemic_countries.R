@@ -3,8 +3,6 @@ library(countrycode)
 library(cowplot)
 library(rnaturalearth)
 library(magrittr)
-#### GLOBAL MAP OF SUBNATIONAL SUBANNUAL DENGUE DATA #####
-########add density plot of all countries temperatures
 
 gbd <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>% 
   filter(measure == "Incidence") %>% 
@@ -31,8 +29,6 @@ gbd <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>%
                                "Virgin Islands, U.S." ~ "US Virgin Is (US)", 
                                .default = location))
 
-########recreate using ggplot
-
 # add iso3 code as a column to gbd
 gbd %<>% mutate(country_name = countrycode(location, "country.name", "iso3c"),
          val = val * 0.1)  # Convert cases per 100k to per 10k
@@ -47,10 +43,6 @@ world <- ne_countries(scale = "medium", returnclass = "sf")
 # Merge your data with the world map data
 world %<>% full_join(gbd, by = c("iso_a3" = "country_name"))
 
-# Define color palette
-# color_palette <- cmocean::cmocean("balance", clip = 0.1)(20)[10:20]
-# color_palette[1] <- "white"
-
 # Create the plot
 map_plot = ggplot(data = world) +
   geom_sf(aes(fill = val), color = NA) +  # Adjust aes(fill = ...) as needed
@@ -58,7 +50,6 @@ map_plot = ggplot(data = world) +
   geom_sf(data = subset(world, dengue == 1), fill = NA, color = "black", lwd = 0.7) +
   labs(fill = "cases \nper 10k") +  # Adjust labels as needed
   coord_sf(xlim = c(-115,150), ylim = c(-55,50))+
-  # scale_fill_continuous(low = "white", high = "#C8102E", na.value="white")+
   scale_fill_gradientn(colors = cmocean::cmocean("rain", end = 0.7)(20),
                        aesthetics = c("fill", "color"),
                        na.value = "grey60") + 
@@ -113,8 +104,6 @@ dens_plot = read.csv("./data/endemic_dengue_country_temperatures.csv") %>%
         text = element_text(size = 8),
         axis.text = element_text(size = 6)) + 
   xlab("mean temperature (°C)")
-
-# plot_grid(map_plot, dens_plot, ncol=1,labels = c('A', 'B'), rel_heights = c(2, 1))
 
 {ggdraw() + 
     draw_plot(map_plot, 0, 0.1, 1, 0.9) + 

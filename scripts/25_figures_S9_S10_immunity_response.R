@@ -3,7 +3,9 @@ library(magrittr)
 library(cowplot)
 library(fixest)
 
-# dengue last year (rolling avg over previous 7-18 months?) x temperature ----
+source("./scripts/00_utilities/functions.R")
+
+immunity_colors = c("#EEB32F", "#00B7A7", "#4E9626", "#AD5585")
 
 unit_covar <- readRDS("./data/unit_covariates.rds") %>% 
   mutate(GBD_rescale = sub_country_dengue/empirical_dengue_incidence)
@@ -12,16 +14,7 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds")
 dengue_temp %<>% left_join(unit_covar %>% select(country, id, mid_year, GBD_rescale))
 
 # add lags, calculate dengue incidence, make some FEs from others
-dengue_temp %<>% arrange(country, mid_year, id, date) %>% 
-  mutate(across(union(contains("temp"), contains("precipitation")), 
-                list(lag1 =~ lag(.x, 1),
-                     lag2 =~ lag(.x, 2),
-                     lag3 =~ lag(.x, 3),
-                     lag4 =~ lag(.x, 4))), 
-         .by = c(country, mid_year, id)) %>% 
-  mutate(dengue_inc = dengue_cases/pop, 
-         countryFE = paste0(country, "_", mid_year),
-         country_id = paste0(country, "_", id)) %>% 
+dengue_temp %<>% prep_dengue_data() %>% 
   mutate(dengue_lag = lag(dengue_inc, 7) + lag(dengue_inc, 8) + 
            lag(dengue_inc, 9) + lag(dengue_inc, 10) + 
            lag(dengue_inc, 11) + lag(dengue_inc, 12) + 
@@ -34,7 +27,6 @@ dengue_temp %<>% arrange(country, mid_year, id, date) %>%
 
 # where should the tercile breaks be? 
 dengue_temp %>% 
-  # filter(dengue_lag > 0) %>%
   pull(dengue_lag) %>% 
   quantile(c(0, 1/4, 2/4, 3/4, 1), na.rm = T) -> dengue_breaks
 
@@ -110,16 +102,6 @@ clim_obs %<>%
             by = c("country", "id_join" = "id")) %>% 
   filter(!is.na(empirical_dengue_incidence))  
 
-immunity_colors = c("#EEB32F", "#00B7A7", "#4E9626", "#AD5585")
-
-# mutate(tercile = case_match(tercile, 
-#                             "tercile1" ~ "low incidence/\nhigh susceptibility", 
-#                             "tercile4" ~ "high incidence/\nlow susceptibility")) %>%
-#             theme_classic() + 
-#             theme(legend.position = "inside", 
-#                   legend.title = element_blank(),
-#                   legend.position.inside = c(0.775, 0.8)), 
-
 dengue_temp %>% 
   mutate(tercile = paste0("quantile ", as.character(dengue_lag_tercile)),
          tercile = case_when(grepl("1", tercile) ~ paste0(tercile, " (low)"), 
@@ -130,7 +112,6 @@ dengue_temp %>%
   scale_x_continuous(trans = "pseudo_log", breaks = c(0, 1, 10, 100, 1000, 1e4, 1e5)) + 
   scale_fill_manual(name = "immunity proxy",
                     values = immunity_colors,
-                    # MetBrewer::met.brewer("Austria", 14)[c(8, 11, 14)],
                     na.translate = F) + 
   theme_classic() + 
   xlab("average lagged dengue (7-18 months)") + 
@@ -179,9 +160,6 @@ het_marginals %>%
          tercile = case_when(grepl("1", tercile) ~ paste0(tercile, " (low)"), 
                              grepl("4", tercile) ~ paste0(tercile, " (high)"), 
                              T ~ tercile)) %>%
-  # filter(grepl("1|4", tercile)) %>%
-  # ggplot(aes(x = x, y = y, ymin = y - 1.96*se, ymax = y + 1.96*se, 
-  #            group = tercile, color = tercile, fill = tercile)) + 
   ggplot(aes(x = x, y = y + yoff, ymin = pmax(y - 1.96*se, -0.76) + yoff, ymax = y + 1.96*se + yoff, 
              group = tercile, color = tercile, fill = tercile)) + 
   geom_hline(yintercept = 0 + yoff) + 
@@ -194,7 +172,6 @@ het_marginals %>%
   geom_line(lwd = 1.3) + 
   scale_fill_manual(name = "immunity proxy",
                     values = immunity_colors,
-                    # MetBrewer::met.brewer("Austria", 14)[c(8, 11, 14)],
                     aesthetics = c("color", "fill"),
                     na.translate = F) + 
   xlab("temperature (C)") + ylab("d log(dengue)/d temp") + 
@@ -243,17 +220,6 @@ clim_obs %>%
       ylab("d log(dengue)/d temp") +  
       theme(legend.position = "none")} -> immunity_marginal_dist
 
-# clim_obs %>% 
-#   filter(empirical_dengue_incidence > 0) %>% 
-#   select(id, country, year, month, x = mean_2m_air_temp_degree1) %>% 
-#   mutate(x = round(x, 3)) %>% 
-#   left_join(het_marginals %>% mutate(x = round(x, 3))) %>% 
-#   filter(grepl("1|4", tercile)) %>%
-#   summarise(., 
-#             mean_marginal = mean(y), 
-#             .by = tercile)
-
-library(cowplot)
 plot_grid(immunity_hist + 
             theme(plot.margin = unit(c(20.5, 5.5, 5.5, 5.5), "points")), 
           immunity_ts + 

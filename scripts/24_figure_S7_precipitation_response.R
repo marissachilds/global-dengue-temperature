@@ -38,7 +38,6 @@ yoff = 0.32
                     group = mod, fill = mod,
                     ymin = y -1.96*se + yoff, 
                     ymax = y + 1.96*se + yoff), color = NA, alpha = 0.1) + 
-    # geom_hline(yintercept = yoff) + 
     scale_y_continuous(breaks = seq(-0.3, 1.5, by = 0.3) + yoff, 
                        labels = function(x){x - yoff}, 
                        expand = expansion(mult = 0.01)) +
