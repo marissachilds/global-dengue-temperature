@@ -32,8 +32,7 @@ import time
 import rioxarray
 import os
 
-# probably not the most efficient way to do this... but lets make a function 
-# to check if the scenario is required based on the dictions
+# make a function to check if the scenario is required based on the dictions
 def check_scenario_req(pair):
     key, value = pair
     return value.get("req")
@@ -144,104 +143,3 @@ for index, row in gcm_variants.iterrows():
 
 t_end = time.time()
 print("total time: " + str(t_init - t_end))
-
-# debugging KACE
-# (dset_dict["ScenarioMIP.NIMS-KMA.KACE-1-0-G.ssp370.Amon.gr"]
-#      .sel(time=slice('2040-01-01', 
-#                      '2059-12-30')))
-# KACE fails because its 360 days/year so Dec 31 doesn't exist
-# dset_dict["ScenarioMIP.NIMS-KMA.KACE-1-0-G.ssp370.Amon.gr"]["time"]
-# but Dec 30 does, and will work for everyone
-
-# Qs/problems: 
-# find ref on unreliable cmip6 daily values 
-# run checks on the cmip6 images 
-# do we want precip? 
-
-# SCRATCH --------        
-
-# FGOALS-f3-L works when running alone or with MIROC6, not sure why it wasn't working before? 
-# 'KACE-1-0-G' works without the wrapper, but not with it --> KACE-1-0-G fails at slice_period because its 360 days per year, so need to end with 12-30 not 12-31
-
-
-# limit to monthly aggregates of avg temp
-# query = dict(experiment_id=scenario_dict.keys(), 
-#              table_id="Amon", 
-#              variable_id='tas')
-# cat_search = cat_full.search(**query)
-
-# among those options, limit to the first member_id for each source_id and scenario
-# cat_sub_df = (cat_search.df.groupby(["source_id", "experiment_id"])
-#            .first()
-#            .reset_index()) 
-# then limit to only GCMs with all the future scenarios we want
-# cat_sub_df["n_scenario_missing"] = (cat_sub_df
-#     .groupby("source_id")["experiment_id"]
-#     .transform(
-#         lambda x: 
-#             len(np.setdiff1d(np.array(req_scenarios), np.array(x.unique())))))
-    
-# cat_sub_df = cat_sub_df.query('n_scenario_missing == 0')
-# some of the models don't seem to work well, maybe with the wrapper? 
-# lets ignore them for now and circle back later
-# cat_sub_df = cat_sub_df.query("source_id == ['KACE-1-0-G']")
-# , 'KACE-1-0-G'
-# 'FGOALS-f3-L'
-
-# cat_sub_df = cat_sub.df
-# update the catalog of the original search 
-# this should be straightforward but wasn't. but this issue helped https://github.com/intake/intake-esm/issues/246
-# cat_search.esmcat._df = cat_sub_df# .reset_index()
-
-
-# dset_dict[gcm_scenario_key].squeeze()["tas"].rio.to_raster(raster_path="dT_test.tif")
-
-
-# out = dset_dict[gcm_scenario_key].squeeze()["tas"]
-# out.rio.write_crs("epsg:4326", inplace=True)
-# out.rio.to_raster(raster_path="dT_test.tif")
-
-        
-#         dT["tas"].rio.to_raster(raster_path=outname)
-
-        
-
-# dT["tas"].rio.to_raster(raster_path="dT_test.tif")
-
-# still do do: 
-# add crs when saving raster  
-# saving raster with name defined by gcm and scenario... 
-
-
-# check the output looks reasonable when you plot it --> good for the single example, try again with latest code
-# check that the resulting tif can be loaded into earth engine
-
-
-# say its 3 mins for each scenario to load, and get climatologies
-# so 3 min x 5 scenarios (historical, hist-nat, ssp126, ssp245, ssp370) x 38 models --> ~ 9 hours in serial, not counting differencing between scenarios
-# we'll need to store ~ 2.7 MB x 4 scenario dT x 38 models -->  410 MB, so not so bad
-# locally, lets just run this, save the dT, add them
-
-# from xmip.preprocessing import (promote_empty_dims, 
-#                                 broadcast_lonlat, 
-#                                 replace_x_y_nominal_lat_lon, 
-#                                 correct_lon, 
-#                                 correct_coordinates, 
-#                                 correct_units,
-#                                 parse_lon_lat_bounds, 
-#                                 maybe_convert_bounds_to_vertex, 
-#                                 maybe_convert_vertex_to_bounds, 
-#                                 rename_cmip6) 
-
-    # ds = rename_cmip6(ds)
-    # ds = correct_units(ds)
-    # ds = promote_empty_dims(ds)
-    # ds = broadcast_lonlat(ds)
-    # ds = replace_x_y_nominal_lat_lon(ds)
-    # ds = correct_lon(ds)
-    # ds = correct_coordinates(ds)
-    # ds = parse_lon_lat_bounds(ds)
-    # ds = maybe_convert_bounds_to_vertex(ds)
-    # ds = maybe_convert_vertex_to_bounds(ds)
-
-

@@ -19,7 +19,7 @@ if (!dir.exists(download_loc)){
 country_tasks = read.csv("../ref_tables/country_tasks.csv") %>% 
   filter(country_shapefile != "CHN" & 
            country_shapefile != "LKA1") %>% 
-  # PHL is the only one in my assets
+  # PHL is the only one in a different location
   mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) %>% 
   select(country_shapefile, identifier_col, ee_loc) %>% 
   distinct
@@ -30,7 +30,7 @@ pop_scale <- pop_proj$nominalScale()$getInfo()
 
 separate_units = list(PHL = c("Sulu", "Palawan"))
 
-all_exports3 <- country_tasks %>%
+all_exports <- country_tasks %>%
   # add the number of splits for each country  
   mutate(n_split = case_when(country_shapefile %in% c("PHL", "COL") ~ 8,
                              country_shapefile %in% c("IDN") ~ 4, 
@@ -111,7 +111,7 @@ all_exports3 <- country_tasks %>%
   })
 
 # when they've all finished, download the csvs to local
-unlist(all_exports3) %>% 
+unlist(all_exports) %>% 
   purrr::map(function(x){
     temp = x$status()
     name =  temp$description

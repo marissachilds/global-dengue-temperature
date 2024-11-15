@@ -49,15 +49,3 @@ purrr::map(1:12, function(m){
   unlink(y_files)
 })
 
-#test <- raster(ncfile)
-# need to add 0.125 in x, -0.125 in y (i.e., needs to go down and right) 
-# crs(test) <- paste0(crs(test)@projargs, " +x_0=0.125 +y_0=-0.125")
-
-# extent(test)
-# # lets save and upload to EE to check
-# 
-# writeRaster(test, 
-#             "./data/era5_test_2000_01.tif", 
-#             overwrite = TRUE,
-#             format = "GTiff")
-

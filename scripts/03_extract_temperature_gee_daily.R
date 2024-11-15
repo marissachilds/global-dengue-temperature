@@ -1,7 +1,4 @@
-# TO DO for this script:
-# this runs only from the old Rproj currently, need to figure out what settings are in there, and recreate them
-# redo chunking of shapefiles to match the way that the cmip6 extractions do it
-
+# potentially redo chunking of shapefiles to match the way that the cmip6 extractions do it
 library(magrittr)
 library(tidyr)
 library(reticulate)
@@ -38,7 +35,7 @@ era5_clim <- purrr::map(1:12,
 # eventually will need to figure out what to do with data from July 2020 and on, but lets not worry about that for now 
 
 country_tasks = read.csv("./ref_tables/country_tasks.csv") %>% 
-  # PHL is the only one in my assets
+  # PHL is the only one in a different location on earth engine
   mutate(ee_loc = ifelse(country_shapefile == "PHL", "users/marissachilds/", "users/lyberger/dengue/")) 
 
 # reformat dates from month-day-year to year-month-day
@@ -50,7 +47,6 @@ country_tasks %<>%
          end_date = as.Date(end_date, format = "%m/%d/%y") %>% 
            add(as.difftime(1, units = "days")) %>%
            format("%Y-%m-%d"))
-
 
 # COL and PHL have trouble running, has out of memory errors, so split it into 4 time spans 
 country_tasks %<>% 
@@ -247,7 +243,6 @@ retry::wait_until(
   expr = all(purrr::map_chr(unlist(country_exports), function(x) x$status()$state) == "COMPLETED"), 
   interval = 120
 )
-beepr::beepr()
 
 # once all are completed, download to local
 unlist(country_exports) %>% 

@@ -4,7 +4,6 @@ mid_rescaler <- function(mid = 0) {
   }
 }
 
-
 marginal_est_se <- function(mod,
                             coef_name_regex = "",
                             x_seq,
@@ -52,7 +51,19 @@ response_est_se <- function(mod, coef_name_regex,
                         debug = FALSE, 
                         vcov_mat, coef_vec, 
                         degree_regex = "degree"){
-
+  if(!missing(mod)){
+    if(!missing(coef_vec)) warning("Both model and coefficient vector provided. Using coef(model) by default")
+    coef_vec <- coef(mod)
+  } else if(missing(mod) & missing(coef_vec)){
+    stop("Must specify either model (mod) or coefficient vector (coef_vec).")
+  }
+  
+  if(!missing(mod)){
+    if(!missing(vcov_mat)) warning("Both model and variance-covariance matrix provided. Using coef(model) by default.")
+    vcov_mat = mod %>% vcov(vcov = vcov_type)
+  } else if(missing(mod) & missing(coef_vec)){
+    stop("Must specify either model (mod) or variance-covariance matrix (vcov_mat).")
+  }
   coef_names <- mod %>%
     coef %>%
     names
@@ -69,19 +80,15 @@ response_est_se <- function(mod, coef_name_regex,
       vcov(vcov = vcov_type) %>%
       magrittr::extract(ind, ind)
   }
-  # if(debug){print(coef_vcv)}
   coef_est <- mod %>%
     coef %>%
     magrittr::extract(ind)
-  # if(debug){print(coef_est)}
   est <- coef_est %*% (sapply(degs, function(x)  x_seq^x) %>% t)
-  # if(debug){print(est)}
   if(!is.na(vcov_type)){
     var <- (sapply(degs, function(x)  x_seq^x)) %*% coef_vcv %*% t(sapply(degs, function(x)  x_seq^x))
     se <- sqrt(diag(var))
   } else{se <- NA}
   
-  # if(debug){print(var)}
   data.frame(x = x_seq,
              y = est[1,],
              se = se) %>%

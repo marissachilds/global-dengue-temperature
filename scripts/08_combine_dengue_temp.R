@@ -1,13 +1,6 @@
 library(tidyverse)
 library(magrittr)
 
-# KHM — one of the units is all 0s because it wasn’t created yet (created in 2013, case data ends in 2010) so we should just be able to combine its climate data with the unit it broke off from. 
-# THA — 5 units were created in recent-ish times and all are missing dengue data but are in the spatial shapefiles. 
-    # For whatever reason, those units are missing from the Tycho data, but available in the Open Dengue data, so I think we can just switch to using that data. (https://opendengue.org/)
-# PHL — a number of places have all NAs/0s but per other systems have a fair amount of dengue. Weirdly, those places are missing dengue data in the Tycho data we’re working with, but an alternative dataset also from Tycho has data for those units (https://www.tycho.pitt.edu/dataset/PH.38362002/) so I think we can just switch to using that updated data. 
-  # jk, they're not in that other tycho dataset 
-# MYS — of the 4 units without dengue data, one is most concerning W.P. Kuala Lumpur, the capital city which has quite a bit of dengue and a large population. I don’t really know what to do about this one yet. 
-
 # country tasks for some general information
 gee_tasks <- read.csv("../ref_tables/country_tasks.csv") %>% 
   mutate(start_date = as.Date(start_date, format = "%m/%d/%y"), 
@@ -149,7 +142,5 @@ dengue_temp %>%
 dengue_temp %>% 
   filter(!is.na(dengue_cases) & is.na(mean_2m_air_temperare_degree1)) %>% 
   nrow
-
-# fix KHM
 
 saveRDS(dengue_temp, "./data/dengue_temp_full.rds")

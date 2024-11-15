@@ -22,13 +22,7 @@ cat_subset <- catalog %>%
            equals(0), 
          .by = source_id) %>% 
   # filter to models with TCR in the expected range (8 of the source_id at this point aren't in the TCR list, but lets ignore them)
-  filter(source_id %in% (gcm_tcr %>% filter(TCR  >= tcr_range[1] & TCR <= tcr_range[2]) %>% pull(Model))) #%>% 
-  # pull(source_id) %>% n_distinct # this leaves us with 22 models
-  # lets drop some variable that aren't needed to uniquely identify our dataset anymoore
-  # unique %>% nrow # 921
-  # select(-zstore, -table_id, -variable_id, -grid_label, -dcpp_init_year, 
-  #        -version, -activity_id, -institution_id) 
-  # unique %>% nrow # still 921
+  filter(source_id %in% (gcm_tcr %>% filter(TCR  >= tcr_range[1] & TCR <= tcr_range[2]) %>% pull(Model))) 
 
 # lets define an ordering for the member_id/variants to so we can default to taking the same r1i1p1f1
 variant_order = cat_subset %>% 
@@ -66,13 +60,6 @@ cat_subset %<>% mutate(member_id = factor(member_id, levels = variant_order, ord
          .by = c(source_id, member_id)) %>% 
   arrange(source_id, member_id, experiment_id) 
 
-
-
-# cat_subset %>% 
-#   mutate(all = member_id == min(member_id[all_model_scenarios]), 
-#          .by = source_id) %>% 
-#   View
-#   
 # now for each source_id, if there's any member_ids that work for all scenarios, use the first one (order determined by variant order above)
 cat_use <- cat_subset %>% 
   mutate(use = case_when(member_id == min(member_id[all_model_scenarios], na.rm = T) ~ "all", 
@@ -101,37 +88,3 @@ catalog %>%
 write.csv(cat_use, 
           "./data/GCM_variant_scenarios_to_include.csv", 
           row.names = FALSE)
-
-# SCRATCH 
-
-
-
-# models and variants  
-# 1) ACCESS-CM2 -- r1i1p1f1
-# 2) ACCESS-ESM1-5  -- r33i1p1f1 for future, r1i1p1f1 for hist-nat 
-# 3) AWI-CM-1-1-MR -- r1i1p1f1
-# 4) BCC-CSM2-MR -- r1i1p1f1
-# 5) CAMS-CSM1-0 -- r1i1p1f1
-# 6) CESM2 -- r1i1p1f1 for hist-nat, r4i1p1f1 for future
-# 7) CESM2-WACCM -- r1i1p1f1
-# 8) CNRM-CM6-1 -- r1i1p1f2
-# 9) CNRM-ESM2-1 -- r1i1p1f2
-# 10) FGOALS-f3-L -- r1i1p1f1
-# 11) GFDL-ESM4 -- r1i1p1f1
-# 12) GISS-E2-1-G -- r1i1p3f1 for future, 
-
-
-  
-# what uniquely identifies a row in the catalog? 
-# catalog %>%
-#   select(activity_id, source_id, experiment_id, member_id, table_id, member_id) %>% 
-#   unique %>% nrow
-# ones previously missing TCR, when not considering 1pctC02 and piControl needed
-# CanESM5-CanOE"    "FGOALS-g3"        "NorESM2-MM"       "EC-Earth3-Veg-LR" "CMCC-CM2-SR5"     "TaiESM1"         
-# [7] "CAS-ESM2-0"       "CMCC-ESM2"    
-
-# current ones missing TCR when those scenarios are considered (i.e., lost EC-Earth3-Veg-LR)
-# "CanESM5-CanOE" "FGOALS-g3"     "NorESM2-MM"    "TaiESM1"       "CMCC-CM2-SR5"  "CAS-ESM2-0"    "CMCC-ESM2" 
-
-
-

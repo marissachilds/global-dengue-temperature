@@ -106,8 +106,6 @@ sub_country_dengue <- dengue_temp %>%
 # alternatively, think of scaling the observed sub-country dengue by how much off the country total dengue is from GBD? 
 # obs unit cases / unit pop * ("true" country inc * country pop / obs total country cases)
 # so level of adjustment depends on how far off GBD estimates are from the country surveillance totals 
-# maybe worth plotting just to check and understand whats happening? 
-
 
 
 # combine all the data and convert to terciles ---- 
