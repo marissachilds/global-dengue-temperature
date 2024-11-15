@@ -5,7 +5,7 @@ library(sf)
 library(rworldmap)
 library(cowplot)
 library(gtable)
-library(ggrepel)
+# library(ggrepel)
 
 mid_rescaler <- function(mid = 0) {
   function(x, to = c(0, 1), from = range(x, na.rm = TRUE)) {
@@ -50,7 +50,8 @@ country_temps <- obs_temp %>%
             .by = c(country, id)) %>% 
   left_join(pop) %>% 
   summarise(mean_temp = weighted.mean(mean, sum, na.rm = T), 
-            .by = country)
+            .by = country) %>% 
+  rbind(data.frame(country = "overall", mean_temp = -Inf))
 
 # dengue_units <- readRDS("./data/dengue_temp_full.rds") %>% 
 #   summarise(total_dengue = sum(dengue_cases, na.rm = T), 
@@ -72,12 +73,13 @@ all_shapes <- shp$admin %>% st_simplify(dTolerance = 5000)
 rm(shp)
 
 cities <- st_read("./data/World_Cities")
+# downloaded from https://hub.arcgis.com/datasets/esri::world-cities/about 
 
 # unit-specific estimates
 unit <- expand.grid(x = all_scenarios, 
                     y = c("main", "het_continent_tercile")) %>% 
   purrr::pmap(function(x, y){
-    readRDS(paste0("./output/projection_ests/unit_changes_maxBoot25_mod_", y, "_scenario_", x, ".rds")) %>% 
+    readRDS(paste0("./output/projection_ests/unit_changes_maxBoot100_mod_", y, "_scenario_", x, ".rds")) %>% 
       mutate(scenario = x, mod = y)
   }) %>% list_rbind %>% 
   left_join(country_temps, by = "country") %>% 
@@ -100,9 +102,11 @@ unit <- expand.grid(x = all_scenarios,
 country <- expand.grid(x = all_scenarios, 
                        y = c("main", "het_continent_tercile")) %>% 
   purrr::pmap(function(x, y){
-    readRDS(paste0("./output/projection_ests/country_changes_maxBoot25_mod_", y, "_scenario_", x, ".rds")) %>% 
+    readRDS(paste0("./output/projection_ests/country_changes_maxBoot100_mod_", y, "_scenario_", x, ".rds")) %>% 
       mutate(scenario = x, mod = y)
   }) %>% list_rbind %>% 
+  filter(country != "overall_country_avg") %>% 
+  mutate(country = gsub("_.*", "", country)) %>% 
   left_join(country_temps, by = "country") %>% 
   arrange(scenario, desc(mean_temp)) %>% 
   mutate(country_orig = country, 
@@ -112,9 +116,11 @@ country <- expand.grid(x = all_scenarios,
 # between scenario comparisons
 scenario_comp <- c("main", "het_continent_tercile") %>% 
   purrr::map(function(y){
-    readRDS(paste0("./output/projection_ests/country_changes_maxBoot25_mod_", y, "_scenario_ssp370_minus_ssp126.rds")) %>% 
+    readRDS(paste0("./output/projection_ests/country_changes_maxBoot100_mod_", y, "_scenario_ssp370_minus_ssp126.rds")) %>% 
       mutate(mod = y)
   }) %>% list_rbind %>% 
+  filter(country != "overall_country_avg") %>% 
+  mutate(country = gsub("_.*", "", country)) %>% 
   left_join(country_temps, by = "country") %>% 
   arrange(desc(mean_temp)) %>% 
   mutate(country_orig = country, 
@@ -122,16 +128,15 @@ scenario_comp <- c("main", "het_continent_tercile") %>%
                           levels = unique(country)))
 
 # panel a: map median change by unit ----
-test <- all_shapes %>% 
-  filter(country != "LKA1") %>% 
-  mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
-  full_join(unit %>% filter(scenario == "ssp370" & mod == "main" & sub_country_dengue > 0)) 
 {ggplot() + 
     geom_sf(data = continents,
             fill="grey90", colour="grey10") +
-    geom_sf(data = test, 
-            mapping = aes(fill = pmin(pct_change_dengue_q_0.5, 1.5)*100,
-                          color = pmin(pct_change_dengue_q_0.5, 1.5)*100), 
+    geom_sf(data = all_shapes %>% 
+              filter(country != "LKA1") %>% 
+              mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
+              full_join(unit %>% filter(scenario == "ssp370" & mod == "main" & sub_country_dengue > 0)), 
+            mapping = aes(fill = pmin(pct_change_dengue_mean, 1.5)*100,
+                          color = pmin(pct_change_dengue_mean, 1.5)*100), 
             size = 0.01) + 
     # geom_sf(data = countries, color = "grey90", 
     #         lwd = 0.37, fill = NA) +
@@ -148,7 +153,7 @@ test <- all_shapes %>%
     geom_point(data = cities %>% filter(POP > 5e6 & CNTRY_NAME %in% country_names),
                aes(geometry = geometry),
                stat = "sf_coordinates", 
-               color = "black", shape = 1, size = 2, stroke = 1) +
+               color = "black", shape = 1, size = 2.1, stroke = 0.9) +
     ylim(-34, 33) + 
     xlim(-92, 137) +
     theme_void() +
@@ -174,41 +179,67 @@ test <- all_shapes %>%
 
 # panel b: between scenario comparison ----
 # show the ssp 126, ssp245, ssp370 and then their difference 
-plot_comp2 <- rbind(country, 
-                    scenario_comp %>% mutate(scenario = "ssp126_ssp370")) %>% 
+plot_comp2 <- rbind(country %>% 
+                      select(country, scenario, mod, mean_temp, starts_with("pct_inc")) %>% 
+                      rename_with(~gsub("pct_inc_dengue_change_", "", .x)), 
+                    scenario_comp %>% select(country, mod, mean_temp, starts_with("abs_change")) %>% 
+                      rename_with(~gsub("abs_change_", "", .x)) %>%  
+                      mutate(scenario = "ssp126_ssp370")) %>% 
   filter(!grepl("hist|plusone|ssp245", scenario) & mod == "main") %>% 
   mutate(panel = grepl("_", scenario)) %>% 
   mutate(scenario = factor(scenario, 
-                           levels = c("ssp126", "ssp370", "ssp126_ssp370"))) %>% 
-  mutate(across(starts_with("pct_change_dengue"), 
-                ~ifelse(scenario == "ssp126_ssp370", 
-                        .x*3.5, 
-                        .x))) %>% 
-  ggplot(aes(x = as.numeric(scenario) + 
-               -(as.numeric(country)-11)/22 + 
-               case_when(scenario == "ssp126_ssp370" ~ 0.2, 
-                         scenario == "ssp370" ~ 0.075,
-                         T ~ 0), 
-             color = country)) + 
-  geom_hline(yintercept = 0, alpha = 0.4) + 
-  geom_point(aes(y = pct_change_dengue_q_0.5)) + 
-  geom_vline(xintercept = 2.625, linewidth = 1.7) + 
-  geom_linerange(aes(ymin = pct_change_dengue_q_0.025,
-                     ymax = pmin(pct_change_dengue_q_0.975, 3))) +
-  scale_color_manual(values = MetBrewer::met.brewer("Hiroshige", 21),
-                     aesthetics = c("fill", "color")) +
-  scale_y_continuous(labels = scales::percent, 
-                     sec.axis = sec_axis(~ ./3.5, labels = scales::percent, 
-                                         name = "percent change in dengue")) + 
+                           levels = c("ssp126", "ssp370", "ssp126_ssp370")),
+         panel = grepl("_", scenario)) %>% 
+  mutate(q_0.975 = ifelse(grepl("_", scenario), 
+                          pmin(q_0.975, 2),
+                          pmin(q_0.975, 3))) %>%
+  # # mutate(across(starts_with("pct_change_dengue"),
+  #               ~ifelse(scenario == "ssp126_ssp370",
+  #                       .x*3.5,
+  #                       .x))) %>%
+  {ggplot(data = ., aes(x = as.numeric(scenario) + 
+                          -(as.numeric(country)-11)/22 + 
+                          case_when(scenario == "ssp126_ssp370" ~ 0.2, 
+                                    scenario == "ssp370" ~ 0.075,
+                                    T ~ 0), 
+                        color = country)) + 
+      # hack-y, but lets add white points to get the 0s to align on the y-axis between panels
+      geom_point(data = summarise(.,
+                                  ymax = max(q_0.975),
+                                  ymin = min(q_0.025),
+                                  .by = panel) %>% 
+                   # rescale the other panels to match ssp126_ssp370
+                   # essentially need to multiply the low value of the other panel by the ratio of ymax/ymin 
+                   mutate(rescaler = ymin[panel == T]/ymax[panel == T],
+                          ymin = ifelse(!panel, ymax*rescaler, ymin)) %>%
+                   pivot_longer(starts_with("y")),
+                 aes(x = ifelse(panel, 3, 1), y = value),
+                 alpha = 0, color = "white", shape = 2, inherit.aes = FALSE) +
+      geom_hline(yintercept = 0, alpha = 0.4) + 
+      geom_point(aes(y = mean)) +
+      # geom_vline(xintercept = 2.625, linewidth = 1.7) + 
+      geom_linerange(aes(ymin = q_0.025,
+                         ymax = q_0.975)) +
+      # lemon::facet_rep_grid(~panel, scales = "free", space = "free_x") +
+      facet_wrap(~panel, scales = "free")  + 
+      scale_color_manual(values = c(MetBrewer::met.brewer("Hiroshige", 21), "grey40"),
+                         aesthetics = c("fill", "color")) +
+        scale_y_continuous(labels = scales::percent, 
+                           expand = expansion(mult = c(0.02, 0))) +
+        # , 
+        # sec.axis = sec_axis(~ ./3.5, labels = scales::percent, 
+        #                     name = "% change in dengue")) + 
   geom_text(data = data.frame(x = c(1, 2.075, 3.2),
                               labs = c("current\nvs\nSSP1-2.6", #"current\nvs\nSSP2-4.5", 
-                                       "current\nvs\nSSP3-7.0", "SSP1-2.6\nvs\nSSP3-7.0")), 
+                                       "current\nvs\nSSP3-7.0", "difference between\nSSP1-2.6 and SSP3-7.0")) %>% 
+              mutate(panel = !grepl("current", labs)), 
             aes(x = x, y = Inf, label = labs), 
             vjust = 1, size = 3,
             inherit.aes = FALSE) + 
-  scale_x_continuous(breaks = c(1 - (1:21-11)/22, 
-                                2.075 - (1:21-11)/22, 
-                                3.2 - (1:21-11)/22), 
+  scale_x_continuous(breaks = c(1 - (1:22-11)/23, 
+                                2.075 - (1:22-11)/23, 
+                                3.2 - (1:22-11)/23), 
+                     expand = expansion(mult = 0.02),
                      labels = country_temps %>% 
                        arrange(desc(mean_temp)) %>% 
                        pull(country) %>% 
@@ -219,14 +250,25 @@ plot_comp2 <- rbind(country,
   #                    expand = expansion(mult = 0.02)) +
   ylab("% change in dengue") + xlab("") + 
   theme_classic() + 
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 55, hjust = 1, size = 6))  
+  theme(plot.margin = unit(c(15.5, 5.5, -5.5, 5.5), "points"),
+        legend.position = "none",
+        strip.background = element_blank(), 
+        strip.text = element_blank(),
+        axis.text.x = element_text(angle = 55, hjust = 1, size = 6))}  
+
+# read the panel scales
+# ggplot_build(plot_comp2)$layout$panel_scales_x
+# 
+# $layout$panel_scales_x[[1]]$range$range
+
+# adjust the size of the panels so left is twice as large 
+plot_comp2  %<>% ggplotGrob
+plot_comp2$widths[[5]] <- plot_comp2$widths[[5]]*2
 
 # combine panels ----
 plot_grid(unit_map + 
             theme(plot.margin = unit(c(15.5, 0, 0, 0), "points")),
-          plot_comp2 + 
-            theme(plot.margin = unit(c(15.5, 5.5, -5.5, 5.5), "points")),  
+          plot_comp2,  
           ncol = 1, nrow = 2, rel_heights = c(1.1, 1),
           hjust = 0, label_x = 0.01, label_size = 12, 
           vjust = c(1.5, 0.75),
@@ -235,121 +277,133 @@ plot_grid(unit_map +
   ggsave(filename = "./figures/figure5.png",
          width = 8, height = 5, bg = "white")
 
-# figure S6: maps of other 3 scenarios  ---- 
-plot_grid(
-  {ggplot() + 
-        geom_sf(data = continents,
-                fill="grey90", colour="grey10") +
-        geom_sf(data = all_shapes %>% 
-                  filter(country != "LKA1") %>% 
-                  mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
-                  full_join(unit %>% filter(scenario %in% c("hist-nat") & mod == "main")), 
-                mapping = aes(fill = -pct_change_dengue_q_0.5*100,
-                              color = -pct_change_dengue_q_0.5*100), 
-                size = 0.01) + 
-        geom_sf(data = countries, color = "grey10", 
-                lwd = 0.32, fill = NA) +
-        ylim(-34, 33) + 
-        xlim(-92, 137) +
-        theme_void() +
-        scale_fill_gradientn(name = "% dengue\ndue to\nclimate change",
-                             colors = cmocean::cmocean("diff", clip = 0.05)(20),
-                             aesthetics = c("fill", "color"),
-                             rescaler = mid_rescaler(),
-                             labels = c("0%", "20%", "40%", "60%"),
-                             breaks = c(0, 0.2, 0.4, 0.6)*100) + 
-        theme(panel.background = element_rect("white", NA), 
-              plot.margin = unit(c(10.5, 5.5, 5.5, 5.5), "points"),
-              legend.position = c(0.57, 0.45), 
-              legend.justification = c("left", "center"))}, 
-  {ggplot() + 
-      geom_sf(data = continents,
-              fill="grey90", colour="grey10") +
-      geom_sf(data = all_shapes %>% 
-                filter(country != "LKA1") %>% 
-                mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
-                full_join(unit %>% filter(scenario %in% c("ssp245", "ssp126") & mod == "main")), 
-              mapping = aes(fill = pmin(pct_change_dengue_q_0.5, 1.5)*100,
-                            color = pmin(pct_change_dengue_q_0.5, 1.5)*100), 
-              size = 0.01) + 
-      geom_sf(data = countries, color = "grey10", 
-              lwd = 0.32, fill = NA) +
-      facet_wrap(~scenario, ncol = 1, 
-                 labeller = as_labeller(c(ssp126 = "SSP1-2.6", 
-                                          ssp245 = "SSP2-4.5"))) + 
-      ylim(-34, 33) + 
-      xlim(-92, 137) +
-      theme_void() +
-      scale_fill_gradientn(name = "% change\nin dengue",
-                           colors = cmocean::cmocean("curl", clip = 0.05)(20),
-                           aesthetics = c("fill", "color"),
-                           rescaler = mid_rescaler(), 
-                           breaks = c(0, 0.5, 1, 1.5)*100, 
-                           labels = c("0%", "50%", "100%", ">150%")) + 
-      theme(panel.background = element_rect("white", NA), 
-            plot.margin = unit(c(10.5, 5.5, 5.5, 5.5), "points"),
-            strip.text = element_text(size = 13, face = "bold"),
-            legend.justification = c("left", "center"),
-            legend.position = c(0.57, 0.7))},
-    labels = c("a) estimated impact of current warming (1995 - 2014)", 
-               "b) projected changes under future climate scenarios (2040 - 2059)"),
-    hjust = 0, label_x = 0.01, label_size = 14,
-    rel_heights = c(1, 2), 
-    ncol = 1) %>% 
-  ggsave(filename = "./figures/figureS6_projection_maps.png", 
-         width = 8, height = 8.25, bg = "white")
+# figure S7: maps of other 2 future scenarios  ---- 
+# plot_grid(
+#   {ggplot() + 
+#         geom_sf(data = continents,
+#                 fill="grey90", colour="grey10") +
+#         geom_sf(data = all_shapes %>% 
+#                   filter(country != "LKA1") %>% 
+#                   mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
+#                   full_join(unit %>% filter(scenario %in% c("hist-nat") & mod == "main")), 
+#                 mapping = aes(fill = -pct_change_dengue_q_0.5*100,
+#                               color = -pct_change_dengue_q_0.5*100), 
+#                 size = 0.01) + 
+#         geom_sf(data = countries, color = "grey10", 
+#                 lwd = 0.32, fill = NA) +
+#         ylim(-34, 33) + 
+#         xlim(-92, 137) +
+#         theme_void() +
+#         scale_fill_gradientn(name = "% dengue\ndue to\nclimate change",
+#                              colors = cmocean::cmocean("diff", clip = 0.05)(20),
+#                              aesthetics = c("fill", "color"),
+#                              rescaler = mid_rescaler(),
+#                              labels = c("0%", "20%", "40%", "60%"),
+#                              breaks = c(0, 0.2, 0.4, 0.6)*100) + 
+#         theme(panel.background = element_rect("white", NA), 
+#               plot.margin = unit(c(10.5, 5.5, 5.5, 5.5), "points"),
+#               legend.position = c(0.57, 0.45), 
+#               legend.justification = c("left", "center"))}, 
+{ggplot() + 
+    geom_sf(data = continents,
+            fill="grey90", colour="grey10") +
+    geom_sf(data = all_shapes %>% 
+              filter(country != "LKA1") %>% 
+              mutate(country = ifelse(country == "LKA2", "LKA", country)) %>% 
+              left_join(unit %>% 
+                          filter(scenario %in% c("ssp245", "ssp126") & mod == "main" & 
+                                   sub_country_dengue > 0),
+                        multiple = "all") %>% 
+              filter(!is.na(scenario)), 
+            mapping = aes(fill = pmin(pct_change_dengue_mean, 1.5)*100,
+                          color = pmin(pct_change_dengue_mean, 1.5)*100), 
+            size = 0.01) + 
+    geom_sf(data = countries, color = "grey10", 
+            lwd = 0.32, fill = NA) +
+    facet_wrap(~scenario, ncol = 1, 
+               labeller = as_labeller(c(ssp126 = "a) projected changes under SSP1-2.6 (2040 - 2059)", 
+                                        ssp245 = "b) projected changes under SSP2-4.5 (2040 - 2059)"))) + 
+    ylim(-34, 33) + 
+    xlim(-92, 137) +
+    theme_void() +
+    scale_fill_gradientn(name = "% change\nin dengue",
+                         colors = cmocean::cmocean("curl", clip = 0.05)(20),
+                         aesthetics = c("fill", "color"),
+                         rescaler = mid_rescaler(), 
+                         breaks = c(0, 0.5, 1, 1.5)*100, 
+                         labels = c("0%", "50%", "100%", ">150%"),
+                         na.value = "grey90") + 
+    theme(panel.background = element_rect("white", NA), 
+          plot.margin = unit(c(10.5, 5.5, 5.5, 5.5), "points"),
+          strip.text = element_text(size = 13, face = "bold", 
+                                    vjust = 1, hjust = 0),
+          legend.justification = c("left", "center"),
+          legend.position = c(0.57, 0.2))} %>% 
+  # labels = c("a) estimated impact of current warming (1995 - 2014)", 
+  #            "b) projected changes under future climate scenarios (2040 - 2059)"),
+  # hjust = 0, label_x = 0.01, label_size = 14,
+  #     rel_heights = c(1, 2), 
+  #     ncol = 1) %>% 
+  ggsave(filename = "./figures/figureS7_projection_maps.png", 
+         width = 8, height = 5.5, bg = "white")
 
-# figure S7 estimates with americas vs asia estimates ----
-plot_comp_sup <- rbind(country, 
-                       scenario_comp %>% mutate(scenario = "ssp126_ssp370")) %>% 
-  filter(!grepl("hist|plusone", scenario) & mod == "het_continent_tercile") %>% 
-  mutate(panel = grepl("_", scenario)) %>% 
-  mutate(scenario = factor(scenario, 
-                           levels = c("ssp126", "ssp245", "ssp370", "ssp126_ssp370"))) %>% 
-  mutate(across(starts_with("pct_change_dengue"), 
-                ~ifelse(scenario == "ssp126_ssp370", 
-                        .x*3.5, 
-                        .x))) %>% 
-  ggplot(aes(x = as.numeric(scenario) + 
-               -(as.numeric(country)-11)/22 + 
-               ifelse(scenario == "ssp126_ssp370", 0.2, 0), 
-             color = country)) + 
-  geom_hline(yintercept = 0, alpha = 0.4) + 
-  geom_point(aes(y = pct_change_dengue_q_0.5)) + 
-  geom_vline(xintercept = 3.625, linewidth = 1.7) + 
-  geom_linerange(aes(ymin = pct_change_dengue_q_0.025,
-                     ymax = pmin(pct_change_dengue_q_0.975, 3))) +
-  scale_color_manual(values = MetBrewer::met.brewer("Hiroshige", 21),
-                     aesthetics = c("fill", "color")) +
-  scale_y_continuous(labels = scales::percent, 
-                     sec.axis = sec_axis(~ ./3.5, labels = scales::percent, 
-                                         name = "percent change in dengue")) + 
-  scale_x_continuous(breaks = c(1:3, 4.2),
-                     labels = c("current\nvs\nSSP1-2.6", "current\nvs\nSSP2-4.5", 
-                                "current\nvs\nSSP3-7.0", "SSP1-2.6\nvs\nSSP3-7.0"), 
-                     expand = expansion(mult = 0.02)) +
-  ylab("% change in dengue") + xlab("") + 
-  theme_classic() + 
-  theme(legend.position = "none")  
-
+# figure S8 estimates with americas vs asia estimates ----
+# plot_comp_sup <- rbind(country %>% 
+#                          select(country, scenario, mod, mean_temp, starts_with("pct_inc")) %>% 
+#                          rename_with(~gsub("pct_inc_dengue_change_", "", .x)), 
+#                        scenario_comp %>% select(country, mod, mean_temp, starts_with("abs_change")) %>% 
+#                          rename_with(~gsub("abs_change_", "", .x)) %>%  
+#                          mutate(scenario = "ssp126_ssp370")) %>% 
+#   filter(!grepl("hist|plusone", scenario) & mod == "het_continent_tercile") %>% 
+#   mutate(panel = grepl("_", scenario)) %>% 
+#   mutate(scenario = factor(scenario, 
+#                            levels = c("ssp126", "ssp245", "ssp370", "ssp126_ssp370"))) %>% 
+#   mutate(across(starts_with("pct_change_dengue"), 
+#                 ~ifelse(scenario == "ssp126_ssp370", 
+#                         .x*3.5, 
+#                         .x))) %>% 
+#   ggplot(aes(x = as.numeric(scenario) + 
+#                -(as.numeric(country)-11)/22 + 
+#                ifelse(scenario == "ssp126_ssp370", 0.2, 0), 
+#              color = country)) + 
+#   geom_hline(yintercept = 0, alpha = 0.4) + 
+#   geom_point(aes(y = pct_change_dengue_mean)) + 
+#   geom_vline(xintercept = 3.625, linewidth = 1.7) + 
+#   geom_linerange(aes(ymin = pct_change_dengue_q_0.025,
+#                      ymax = pmin(pct_change_dengue_q_0.975, 3))) +
+#   scale_color_manual(values = MetBrewer::met.brewer("Hiroshige", 21),
+#                      aesthetics = c("fill", "color")) +
+#   scale_y_continuous(labels = scales::percent, 
+#                      sec.axis = sec_axis(~ ./3.5, labels = scales::percent, 
+#                                          name = "percent change in dengue")) + 
+#   scale_x_continuous(breaks = c(1:3, 4.2),
+#                      labels = c("current\nvs\nSSP1-2.6", "current\nvs\nSSP2-4.5", 
+#                                 "current\nvs\nSSP3-7.0", "difference between\nSSP1-2.6 and SSP3-7.0"), 
+#                      expand = expansion(mult = 0.02)) +
+#   ylab("% change in dengue") + xlab("") + 
+#   theme_classic() + 
+#   theme(legend.position = "none")  
+# 
 # plot_comp_sup
-
-rbind(country, 
-      scenario_comp %>% mutate(scenario = "ssp126_ssp370")) %>% 
+rbind(country %>% 
+        select(country, scenario, mod, mean_temp, starts_with("pct_inc")) %>% 
+        rename_with(~gsub("pct_inc_dengue_change_", "", .x)), 
+      scenario_comp %>% select(country, mod, mean_temp, starts_with("abs_change")) %>% 
+        rename_with(~gsub("abs_change_", "", .x)) %>%  
+        mutate(scenario = "ssp126_ssp370")) %>% 
   filter(!grepl("hist|plusone", scenario)) %>% 
-  select(country, pct_change_dengue_q_0.025, pct_change_dengue_q_0.5, 
-         pct_change_dengue_q_0.975, scenario, mod, mean_temp) %>% 
-  rename_with(~gsub("pct_change_dengue_", "", .x)) %>% 
   mutate(mod = case_match(mod, 
                           "het_continent_tercile" ~ "het", 
                           .default = mod)) %>% 
-  pivot_wider(names_from = mod, values_from = starts_with("q")) %>% 
+  select(country, q_0.025, mean, q_0.975, scenario, mod, mean_temp) %>% 
+  pivot_wider(names_from = mod, values_from = c(q_0.025, mean, q_0.975)) %>% 
   left_join(dengue_units %>% select(country, continent_tercile) %>% distinct) %>% 
+  mutate(continent_tercile = replace_na(continent_tercile, "overall")) %>% 
   arrange(desc(mean_temp)) %>% 
   mutate(continent_tercile = stringr::str_to_sentence(continent_tercile),
          country = factor(country, ordered = T, 
                           levels = unique(country))) %>% 
-  ggplot(aes(x = q_0.5_main, y = q_0.5_het, shape = continent_tercile, 
+  ggplot(aes(x = mean_main, y = mean_het, shape = continent_tercile, 
              color = country)) + 
   geom_abline(slope = 1, intercept = 0, alpha = 0.75) + 
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.75) + 
@@ -357,26 +411,26 @@ rbind(country,
   geom_point() + 
   geom_linerange(aes(ymin = q_0.025_het,
                      ymax = pmin(q_0.975_het, 
-                                 case_when(scenario == "ssp126" ~ 1.65, 
-                                           scenario == "ssp245" ~ 2, 
-                                           scenario == "ssp370" ~ 2.25, 
-                                           scenario == "ssp126_ssp370" ~ 0.45))),
+                                 case_when(scenario == "ssp126" ~ 2, 
+                                           scenario == "ssp245" ~ 2.5, 
+                                           scenario == "ssp370" ~ 3, 
+                                           scenario == "ssp126_ssp370" ~ 1.25))),
                  linewidth = 0.2) +
   geom_linerange(aes(xmin = q_0.025_main,
                      xmax = pmin(q_0.975_main, 
-                                 case_when(scenario == "ssp126" ~ 1.65, 
-                                           scenario == "ssp245" ~ 2, 
-                                           scenario == "ssp370" ~ 2.25, 
-                                           scenario == "ssp126_ssp370" ~ 0.45))), 
+                                 case_when(scenario == "ssp126" ~ 2, 
+                                           scenario == "ssp245" ~ 2.5, 
+                                           scenario == "ssp370" ~ 3, 
+                                           scenario == "ssp126_ssp370" ~ 1.25))), 
                  linewidth = 0.2) +
   facet_wrap(~scenario, scales = "free", 
              labeller = labeller(scenario = c("ssp126" = "current vs SSP1-2.6", 
                                               "ssp245" = "current vs SSP2-4.5", 
                                               "ssp370" = "current vs SSP3-7.0", 
-                                              "ssp126_ssp370" = "SSP1-2.6 vs SSP3-7.0"))) +
+                                              "ssp126_ssp370" = "difference between\nSSP1-2.6 and SSP3-7.0"))) +
   xlab("projected % change in dengue\nunder main model specification") + 
   ylab("projected % change in dengue\nunder continent-specific model specification") + 
-  scale_color_manual(values = MetBrewer::met.brewer("Hiroshige", 21), 
+  scale_color_manual(values = c(MetBrewer::met.brewer("Hiroshige", 21), "grey40"),
                      guide = "none") +
   scale_x_continuous(labels = scales::percent) + 
   scale_y_continuous(labels = scales::percent) + 
@@ -394,8 +448,8 @@ test <- all_shapes %>%
     geom_sf(data = continents,
             fill="grey90", colour="grey10") +
     geom_sf(data = test, 
-            mapping = aes(fill = pmin(pct_change_dengue_q_0.5, 1.5)*100,
-                          color = pmin(pct_change_dengue_q_0.5, 1.5)*100), 
+            mapping = aes(fill = pmin(pct_change_dengue_mean, 1.5)*100,
+                          color = pmin(pct_change_dengue_mean, 1.5)*100), 
             size = 0.01) + 
     # geom_sf(data = countries, color = "grey90", 
     #         lwd = 0.37, fill = NA) +
@@ -466,7 +520,7 @@ boot_marg <- as.matrix(boot_coef_ests %>% select(contains("air_temp"))) %*% t(te
                names_transform = as.numeric,
                names_to = "x", values_to = "y") %>% 
   summarise(ymin = quantile(y, 0.025), 
-            ymid = quantile(y, 0.5),
+            ymid = mean(y, 0.5),
             ymax = quantile(y, 0.975), 
             .by = c(x, mod))
 
@@ -521,8 +575,51 @@ plot_grid(unit_map_het +
           vjust = c(1.5, 0.75),
           labels = c("a) projected change in dengue incidence under SSP3-7.0 with continent-specific estimates", 
                      'b) comparison projected changes with main and continent-specific estimates')) %>% 
-  ggsave(filename = "./figures/figureS7_het_projections.png",
+  ggsave(filename = "./figures/figureS8_het_projections.png",
          width = 8, height = 8, bg = "white")
+
+# SI table ----
+purrr::map(c("ssp126", "ssp245", "ssp370", "hist-nat"), function(x){
+  readRDS(paste0("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_", x, ".rds")) %>% 
+      mutate(scenario = x)
+  }) %>% list_rbind %>% 
+  select(country, scenario, 
+         lwr = pct_inc_dengue_change_q_0.025,
+         mean = pct_inc_dengue_change_mean, 
+         upr = pct_inc_dengue_change_q_0.975) %>% 
+  rbind(readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_ssp370_minus_ssp126.rds") %>% 
+          transmute(country, scenario = "ssp126_ssp370",
+                    lwr = abs_change_q_0.025,
+                    mean = abs_change_mean, 
+                    upr = abs_change_q_0.975)) %>% 
+  transmute(scenario, country, 
+            est = paste0(round(mean*100, 1), "% (",
+                         round(lwr*100, 1), "-", 
+                         round(upr*100, 1), "%)")) %>%
+  mutate(country = ifelse(country == "overall_pop_weight", "overall", country)) %>%
+  mutate(scenario = factor(scenario, levels = c("hist-nat", 
+                                                "ssp126", 
+                                                "ssp245", 
+                                                "ssp370", 
+                                                "ssp126_ssp370"), 
+                           ordered = T)) %>% 
+  arrange(scenario) %>% # convoluted way to get factor in the right order for later
+  mutate(scenario = case_match(scenario, 
+                               "ssp126" ~ "current vs SSP1-2.6", 
+                               "ssp245" ~ "current vs SSP2-4.5", 
+                               "ssp370" ~ "current vs SSP3-7.0", 
+                               "ssp126_ssp370" ~ "difference between SSP1-2.6 and SSP3-7.0", 
+                               "hist-nat" ~ "current vs no anthropogenic forcing"), 
+         scenario = factor(scenario, ordered = T, levels = unique(scenario))) %>%
+  arrange(scenario, country) %>% 
+  pivot_wider(names_from = scenario, values_from = est) %>% 
+  xtable::xtable(., 
+                 caption = "Projected percent change in dengue incidence for countries under different climate scenarios. Numbers are mean estimates followed by 95\\% CIs.",
+                 label = "country_proj") %>% 
+  print(file = "./figures/table_SX_country_projections.tex", 
+        include.rownames = FALSE)
+# in the future, update to fix column names to make multi-row to reduce post-processing
+  
 
 # historical for erin ----
 # test <- all_shapes %>% 
