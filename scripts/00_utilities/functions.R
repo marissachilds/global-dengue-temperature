@@ -1,9 +1,17 @@
+mid_rescaler <- function(mid = 0) {
+  function(x, to = c(0, 1), from = range(x, na.rm = TRUE)) {
+    scales::rescale_mid(x, to, from, mid)
+  }
+}
+
+
 marginal_est_se <- function(mod,
                             coef_name_regex = "",
                             x_seq,
                             vcov_type = "cluster",
                             debug = FALSE,
-                            vcov_mat, coef_vec){
+                            vcov_mat, coef_vec, 
+                            degree_regex = "degree"){
   if(!missing(mod)){
     if(!missing(coef_vec)) warning("Both model and coefficient vector provided. Using coef(model) by default")
     coef_vec <- coef(mod)
@@ -21,8 +29,8 @@ marginal_est_se <- function(mod,
   if(debug){print(coef_names)}
   ind <- which(grepl(coef_name_regex, coef_names))
   if(debug){print(ind)}
-  degs <- stringr::str_extract(coef_names[ind], stringr::regex("degree\\d")) %>%
-    gsub(pattern = "degree", replacement = "") %>%
+  degs <- stringr::str_extract(coef_names[ind], stringr::regex(paste0(degree_regex, "\\d"))) %>%
+    gsub(pattern = degree_regex, replacement = "") %>%
     as.numeric %>%
     replace_na(1)
   if(debug){print(degs)}
@@ -41,7 +49,9 @@ marginal_est_se <- function(mod,
 response_est_se <- function(mod, coef_name_regex,
                         x_seq,
                         vcov_type = "cluster",
-                        debug = FALSE){
+                        debug = FALSE, 
+                        vcov_mat, coef_vec, 
+                        degree_regex = "degree"){
 
   coef_names <- mod %>%
     coef %>%
@@ -49,8 +59,8 @@ response_est_se <- function(mod, coef_name_regex,
   if(debug){print(coef_names)}
   ind <- which(grepl(coef_name_regex, coef_names))
   if(debug){print(ind)}
-  degs <- stringr::str_extract(coef_names[ind], stringr::regex("degree\\d")) %>%
-    gsub(pattern = "degree", replacement = "") %>%
+  degs <- stringr::str_extract(coef_names[ind], stringr::regex(paste0(degree_regex, "\\d"))) %>%
+    gsub(pattern = degree_regex, replacement = "") %>%
     as.numeric %>%
     replace_na(1)
   if(debug){print(degs)}
