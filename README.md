@@ -3,10 +3,10 @@
 ## Download/extract data 
 
 ### Shapefiles and population data 
-1) Download all shapefiles 
+1) Download all shapefiles and simplify PHL shapefile, 
   - Manual downloads (ADD SOURCES)
-2) Simplify PHL shapefile, upload all to earth engine assets 
   - 00_setup/phl_shp_debug.R
+2) upload all to earth engine assets (manual)
 3) Transform shapefiles for plotting centered around Pacific Ocean
   - 00_setup/transform_shapefiles.R
 4) Download population data from Google Earth Engine

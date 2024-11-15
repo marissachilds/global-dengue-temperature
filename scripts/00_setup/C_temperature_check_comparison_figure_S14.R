@@ -1,13 +1,8 @@
 library(tidyverse)
 library(magrittr)
 library(sf)
-
-
-mid_rescaler <- function(mid = 0) {
-  function(x, to = c(0, 1), from = range(x, na.rm = TRUE)) {
-    scales::rescale_mid(x, to, from, mid)
-  }
-}
+library(fixest)
+library(ggtext)
 
 station_ll <- readRDS("./data/ghcn_station_data/study_station_inventory.rds")
 
@@ -34,8 +29,6 @@ ghcn_temps %<>% mutate(temp = temp/10)
 ghcn_temps %<>% left_join(ee_temps, by = c("id", "date")) 
 rm(ee_temps)
 
-library(fixest)
-library(ggtext)
 ghcn_temps %>% 
   rename(temp_ghcn = temp) %>% 
   mutate(temp_raw = temp_raw - 273.15) %>% 

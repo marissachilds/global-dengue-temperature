@@ -3,8 +3,9 @@ library(magrittr)
 library(sf)
 library(rgee)
 
+source("./scripts/00_utilities/setup.R")
 # download data matching the time period for each of those stations from earth engine 
-ee_Initialize(user = "mlc1132") 
+ee_Initialize(user = gee_user) 
 
 station_ll <- readRDS("./data/ghcn_station_data/study_station_inventory.rds")
 
@@ -70,7 +71,7 @@ temp_ims$first()$propertyNames()$getInfo()
 
 
 station_ee <- sf_as_ee(station_ll %>% select(id))
-# Map$addLayer(station_ee)
+
 # now extract temperature data for each station
 station_daily = temp_ims$map(function(day_im){
   ee$Image(day_im)$reduceRegions(collection = station_ee, 
@@ -80,9 +81,6 @@ station_daily = temp_ims$map(function(day_im){
               return}) %>% 
     return
 }) %>% ee$FeatureCollection$flatten()
-
-# ee$String(temp_ims$first()$get("system:id"))$replace(".*/", "")$getInfo()
-# temp_ims$first()$get("system:index")$getInfo()
 
 ee_print(ee$Feature(station_daily$first()))
 ee$Feature(station_daily$first())$propertyNames()$getInfo()
