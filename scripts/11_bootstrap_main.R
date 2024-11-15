@@ -5,8 +5,9 @@ library(fixest)
 library(foreach)
 library(doParallel)
 
+source("./scripts/00_utilities/functions.R")
 # set options 
-n_boot <- 1000 # try 10 for testing, 1000 for full boostrap
+n_boot <- 1000 
 
 if(Sys.getenv('SLURM_JOB_ID') != ""){
   registerDoParallel(cores = Sys.getenv("SLURM_NTASKS_PER_NODE"))
@@ -36,20 +37,11 @@ boot_strat_newID <- function(df_ids, # dataset with IDs and state of every stati
 }
 
 # load data ----
-dengue_temp <- readRDS("dengue_temp_full.rds") 
+dengue_temp <- readRDS("./data/dengue_temp_full.rds") 
 
 # add lags of temperature ----
 dengue_temp %<>% 
-  arrange(country, mid_year, id, date) %>% 
-  mutate(across(union(contains("temp"), contains("precipitation")), 
-                list(lag1 =~ lag(.x, 1),
-                     lag2 =~ lag(.x, 2),
-                     lag3 =~ lag(.x, 3),
-                     lag4 =~ lag(.x, 4))), 
-         .by = c(country, mid_year, id)) %>% 
-  mutate(dengue_inc = dengue_cases/pop, 
-         countryFE = paste0(country, "_", mid_year),
-         country_id = paste0(country, "_", id)) %>% 
+  prep_dengue_data %>% 
   filter(!is.na(dengue_inc))
 
 print("data loaded")

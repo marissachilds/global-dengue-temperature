@@ -124,3 +124,19 @@ make_tercile_map <- function(tercile_col, color_vals, tercile_sf){
     theme_void() + 
     theme(legend.position = "none")
 }
+
+# prep data for fitting models by adding lags and FEs
+prep_dengue_data <- function(x){
+  x %>% 
+    arrange(country, mid_year, id, date) %>% 
+    mutate(across(union(contains("temp"), contains("precipitation")), 
+                  list(lag1 =~ lag(.x, 1),
+                       lag2 =~ lag(.x, 2),
+                       lag3 =~ lag(.x, 3),
+                       lag4 =~ lag(.x, 4))), 
+           .by = c(country, mid_year, id)) %>% 
+    mutate(dengue_inc = dengue_cases/pop, 
+           countryFE = paste0(country, "_", mid_year),
+           country_id = paste0(country, "_", id)) %>% 
+    return()
+}

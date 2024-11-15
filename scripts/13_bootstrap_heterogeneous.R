@@ -6,17 +6,10 @@ library(foreach)
 library(doParallel)
 
 # set options 
+source("./scripts/00_utilities/functions.R")
 n_boot <- 1000 # try 10 for testing, 1000 for full boostrap
 het_tercile_colname <- "continent_tercile"
 
-# max_cores <- 1
-# print(paste0("working with ", min(parallel::detectCores(), max_cores), " cores"))
-# registerDoParallel(cores = min(parallel::detectCores(), max_cores))
-# SLURM_CPUS_PER_TASK
-# SLURM_NTASKS_PER_NODE
-# print(Sys.getenv("SLURM_CPUS_PER_TASK"))
-# print(class(Sys.getenv("SLURM_CPUS_PER_TASK")))
-# print(str(Sys.getenv("SLURM_CPUS_PER_TASK")))
 if(Sys.getenv('SLURM_JOB_ID') != ""){
   print(paste0("working with ", as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK")), " total cores"))
   print(paste0("running as ", as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK"))/2, " separate tasks"))
@@ -84,17 +77,7 @@ dengue_temp %<>% left_join(unit_covar %>% select(country, id, mid_year, ends_wit
 
 # add lags of temperature ----
 dengue_temp %<>% 
-  arrange(country, mid_year, id, date) %>% 
-  group_by(country, mid_year, id) %>% 
-  mutate(across(union(contains("temp"), contains("precipitation")), 
-                list(lag1 =~ lag(.x, 1),
-                     lag2 =~ lag(.x, 2),
-                     lag3 =~ lag(.x, 3),
-                     lag4 =~ lag(.x, 4)))) %>% 
-  ungroup %>% 
-  mutate(dengue_inc = dengue_cases/pop, 
-         countryFE = paste0(country, "_", mid_year),
-         country_id = paste0(country, "_", id)) %>% 
+  prep_dengue_data() %>% 
   filter(!is.na(dengue_inc))
 
 print("data loaded")
@@ -102,12 +85,7 @@ print("data loaded")
 df_unit <- dengue_temp %>% 
   select(country_id, country) %>% 
   unique 
-  # summarise(.by = c(country_id, country)) 
 
-# boot_args <- list(df_ids = df_unit, 
-#                   df_full = dengue_temp, 
-#                   id_var = "country_id",
-#                   strat_var = "country")
 
 print("starting bootstraps")
 print(Sys.time())

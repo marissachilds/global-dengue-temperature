@@ -2,21 +2,13 @@
 library(tidyverse)
 library(magrittr)
 library(fixest)
+source("./scripts/00_utilities/functions.R")
 
 dengue_temp <- readRDS("./data/dengue_temp_full.rds")
 
 # add lags of temperature
 dengue_temp %<>% 
-  arrange(country, mid_year, id, date) %>% 
-  mutate(across(union(contains("temp"), contains("precipitation")), 
-                list(lag1 =~ lag(.x, 1),
-                     lag2 =~ lag(.x, 2),
-                     lag3 =~ lag(.x, 3),
-                     lag4 =~ lag(.x, 4))), 
-         .by = c(country, mid_year, id)) %>% 
-  mutate(dengue_inc = dengue_cases/pop, 
-         countryFE = paste0(country, "_", mid_year),
-         country_id = paste0(country, "_", id)) %>% 
+  prep_dengue_data %>% 
   filter(!is.na(dengue_inc))
 
 # fit specs with analytic CIs ----
