@@ -4,7 +4,7 @@ library(sf)
 
 source("./scripts/00_functions.R")
 continent_colors <- c("#466c4b","#90719f")
-other_colors <- c("#ff6020", "#376795", "#ffba42")# "#ffd07f")
+other_colors <- c("#ff6020", "#376795", "#ffba42")# 
 het_ests <- readRDS("./output/mod_ests/het_models_coef_vcv.rds")
 covars_vec <- c("continent", "sub_country_dengue", "health_expenditure", "pop_per_km2")
 temp_seq <- seq(0, 40, 0.1)
@@ -41,14 +41,6 @@ test <- full_join(all_shapes,
                     select(country, id, ends_with("tercile"), sub_country_dengue)) %>% 
   filter(sub_country_dengue > 0)
 
-# het_marginal <- purrr::imap(het_ests[1], 
-#             function(x, name){
-#               marginal_est_se(x, "temp", temp_seq, "cluster", TRUE) %>% 
-#                 mutate(mod = name) %>% 
-#                 return
-#             }) %>% 
-#   extract2(1) %>% str
-
 het_marginals <- het_ests %>% purrr::imap(function(x, name){
   terciles <- names(x$coef) %>% 
     str_split_i("\\:", i = 1) %>%
@@ -81,10 +73,6 @@ covars_vec %>%
                 tercile = !!sym(paste0(cov_name, "_tercile")),
                 panel = cov_name) %>% 
       filter(!is.na(tercile)) %>% # this just currently drops Taiwan in the health expenditure reg since it has no value 
-      # filter(x > quantile(x, 0.01) & 
-      #          x < quantile(x, 0.99), 
-      #        .by = tercile) %>% 
-      # filter(!is.na(dengue_inc) & !is.na(mean_2m_air_temp_degree1)) %>% 
       return
   }) %>% 
   list_rbind() -> temp_by_tercile
@@ -104,12 +92,6 @@ fig3_main <- het_marginals %>%
                         .by = c(tercile, panel))) %>% 
   filter(x > xmin & x < xmax) %>%
   mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>% 
-  # mutate(panel = case_match(panel, 
-  #                           "DTR" ~ "daily temperature range", 
-  #                           "continent" ~ "continent",
-  #                           'CHE2010' ~ "health expenditure", 
-  #                           "dengue" ~ "average dengue incidence", 
-  #                           "density" ~ "population density") ) %>%
   {ggplot(data = ., 
           aes(x = x, 
              group = interaction(panel, tercile), 

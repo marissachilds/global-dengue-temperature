@@ -5,12 +5,7 @@ library(ggrepel) # warning that this package and the repelled labels seems to so
 library(cowplot)
 library(sf)
 
-mid_rescaler <- function(mid = 0) {
-  function(x, to = c(0, 1), from = range(x, na.rm = TRUE)) {
-    scales::rescale_mid(x, to, from, mid)
-  }
-}
-
+source("./scripts/00_utilities/functions.R")
 shp <- readRDS("./data/shapefiles_plotting.rds")
 continents <- shp$continents 
 countries <- shp$countries
@@ -22,7 +17,6 @@ obs_temp <- readRDS("./data/dT_combined/scenarios_era_current_current.gz")
 pop <- readRDS("./data/all_pop2015.rds") %>% 
   filter(country != "CHN")
 # calculate country averages to use later
-# SHOULD THE COUNTRY AVERAGES USE ONLY UNITS WITH DENGUE?
 country_temps <- obs_temp %>% 
   summarise(mean = mean(mean_2m_air_temperature_degree1), 
             .by = c(country, id)) %>% 
@@ -31,14 +25,6 @@ country_temps <- obs_temp %>%
             .by = country) %>% 
   rbind(data.frame(country = "overall", mean_temp = -Inf))
 
-# dengue_units <- readRDS("./data/dengue_temp_full.rds") %>%
-#   summarise(total_dengue = sum(dengue_cases, na.rm = T),
-#             .by = c(country, mid_year, id)) %>%
-#   # drop LKA1, filter to the max mid_year for each country
-#   filter(country != "LKA1") %>%
-#   filter(mid_year == max(mid_year),
-#          .by = country) %>%
-#   select(-mid_year)
 dengue_units <- readRDS("./data/unit_covariates.rds") %>% 
   filter(mid_year == max(mid_year),
          .by = country)
@@ -143,10 +129,7 @@ unit %>%
       geom_density_ridges(aes(x = -`pct_change_dengue_mean`, 
                               height = after_stat(ndensity), 
                               point_alpha = ifelse(country == "overall", 0, pmin(1.5/n_units^(1/3), 0.7))),
-                                # pmin(1.5/log(n_units), 0.7)),
                           alpha = 0.2, color = alpha("grey20", 0.6),
-                          # stat = "density", 
-                          # trim = TRUE,
                           scale = 0.9,
                           rel_min_height = 0.01,
                           bandwidth = 0.0381,
@@ -166,9 +149,6 @@ unit %>%
                      linewidth = 1.3) +
     scale_color_manual(values = c("grey40", rev(MetBrewer::met.brewer("Hiroshige", 21))),
                        aesthetics = c("fill", "color")) +
-    # scale_y_discrete(expand = expansion(mult = c(0.03, 0.075))) +
-    # scale_x_continuous(lim = c(-0.001, 1),
-    # expand = expansion(mult = c(0.02, 0.05))) +
     scale_x_continuous(labels = scales::percent, 
                        breaks = c(-0.2, 0, 0.2, 0.4, 0.6, 0.8),
                        limits = c(-.22, .7)) + 
@@ -228,7 +208,6 @@ boot_marg %>%
                                            levels = unique(country))) ,
                  aes(xintercept = current_mean, color = country)) +
       geom_hline(yintercept = 0) + 
-      # theme_classic() +
       theme_half_open(7) + 
       coord_cartesian(clip = "off") +
       xlab("temperature (°C)") + ylab("d log(dengue)/d T") +
@@ -237,9 +216,7 @@ boot_marg %>%
       theme(legend.position ="none", plot.margin = unit(c(10.5, 5.5, 5.5, 5.5), "points")) +
       scale_x_continuous(expand = expansion(mult = 0.0),
                          limits = c(15, 30.5)) +
-      scale_y_continuous(#breaks = c(-0.25, 0, 0.25, 0.5, 0.75, 1),
-        # limits = c(0, NA),
-        expand = expansion(mult = 0.02))} -> inset_marginal_plot
+      scale_y_continuous(expand = expansion(mult = 0.02))} -> inset_marginal_plot
 # panel c ----
 gbd_est %>% 
   left_join(pop %>% 
@@ -248,9 +225,8 @@ gbd_est %>%
             by = c("country_code" = "country")) %>% 
   left_join(country, 
             by = c("country_code" = "country_orig")) %>% 
-  ggplot(aes(x = val/10, #inc_mid*1000, 
+  ggplot(aes(x = val/10, 
              color = country,
-             # x = Inapparent...5,
              y = -pct_inc_dengue_change_mean)) + 
   geom_point(aes(size = pop)) + 
   geom_linerange(aes(ymin = -pct_inc_dengue_change_q_0.025, 
@@ -258,12 +234,8 @@ gbd_est %>%
   geom_text_repel(aes(label = country),
                   point.padding = 2e-06,
                   size = 2,
-                  # min.segment.length = 0.3,
                   seed = 9999,
                   color = "grey10") +
-            # point.size = 1.3,
-            # min.segment.length = 0.3,
-            # color = "black", size = 3) +
   xlab("estimated incidence (per 10k)") + 
   ylab("% dengue due to historical climate change") + 
   scale_y_continuous(labels = scales::percent) + 
@@ -297,7 +269,7 @@ plot_grid(unit_map +
               theme(legend.position = c(0.57, 0.16),
                     legend.title = element_text(size = 9),
                     plot.margin = unit(c(12.5, 5.5, 5.5, 5.5), "points")), 
-            nrow = 1, #align = "h", axis = "b",
+            nrow = 1, 
             hjust = 0, label_x = 0.01,
             rel_widths = c(1, 0.75),
             vjust = 0.85,
@@ -306,7 +278,6 @@ plot_grid(unit_map +
                        "c) comparison to current dengue burden")), 
           ncol = 1, nrow = 2, rel_heights = c(0.82, 1),
           hjust = 0, label_x = 0.01, label_size = 12, 
-          # vjust = c(1.5, 0.75),
           labels = c("a) estimated impact of historical warming (1995 - 2014)", 
                      '')) %>% 
             ggsave(filename = "./figures/figure4.png", width = 8, height = 5.75, 

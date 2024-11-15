@@ -3,7 +3,6 @@ library(magrittr)
 library(cowplot)
 library(fixest)
 
-# SET UP ---- 
 # load functions 
 source("./scripts/00_functions.R")
 
@@ -83,49 +82,21 @@ boot_marg <- as.matrix(boot_ests) %*% t(temp_marg_mat) %>%
                names_transform = as.numeric,
                names_to = "x", values_to = "y")
 
-# country average temperatures for annotating the figure 
-# country_temp_ranges <- dengue_temp %>% 
-#   filter(!is.na(dengue_cases)) %>%
-#   # for countries in the sample twice, keep the longer time range
-#   mutate(nt = n_distinct(paste0(year, "_", month)), 
-#          .by = c(country, mid_year)) %>% 
-#   filter(nt == max(nt), 
-#          .by = country) %>% 
-#   summarise(mean_temp = mean(mean_2m_air_temp_degree1, na.rm = T), 
-#             pop = unique(pop),
-#             .by = c(id, country)) %>% 
-#   summarise(mid = weighted.mean(mean_temp, pop), 
-#             mid_raw = mean(mean_temp),
-#             min = min(mean_temp), 
-#             max = max(mean_temp), 
-#             pop = sum(pop),
-#             .by = country) %>% 
-#   mutate(label = (mid == min(mid) | mid == max(mid) | 
-#                     min == min(min) | max == max(max) | 
-#                     rank(-pop) <= 2))
-
 # figure 2 ---- 
 # bootstrapped CIs from main, with all estimates
 # calculate mean temperature in the sample, for use in relative response curve
 temp_mean = dengue_temp %>% 
   filter(nonzero_dengue) %>% 
-  # {mean(.$mean_2m_air_temp_degree1)}
   {weighted.mean(.$mean_2m_air_temp_degree1, .$pop)} %>% 
   round(1)
 
 yoff <- 0.5
 hist_scale <- 2.75
-# mods_shown = data.frame(mod = c("main","lag4", "poly4",  "country_mos_FE", "no_brazil", "no_pop_weight"), 
-#                         mod_clean = c("main", "1 - 4 month lags", "4th order polynomial", "month of sample control", "no Brazil", "unweighted")) %>% 
-#   mutate(mod_clean = factor(mod_clean, levels = unique(mod_clean), ordered = T))
-                        
+
 {plot_grid(mod_resp %>% 
              filter(mod %in% c("pop_offset", "poly2", "country_trend") == FALSE) %>% 
-             # filter(x >= 9 & x<= 33) %>%
              filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
                       x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
-             # left_join(mods_shown) %>% 
-             # filter(!is.na(mod_clean)) %>%
              mutate(y = y - y[x == temp_mean],
                     .by = mod) %>% 
              arrange(mod == "main") %>% 
@@ -173,20 +144,11 @@ hist_scale <- 2.75
                    legend.background = element_blank(), 
                    plot.margin = unit(c(22.5, 5.5, 2.5, 5.5), "points")) +
              guides(color = guide_legend(override.aes = list(linewidth = 1))) + 
-             # scale_color_manual(name = "", 
-             #                    values = c("grey10", "red"),
-             #                               # MetBrewer::met.brewer("Juarez", nrow(mods_shown) - 1)),
-             #                    aesthetics = c("color", "fill")) +
              xlab("temperature (°C)") + ylab("relative log(dengue)") + 
              scale_x_continuous(expand = expansion(mult = 0.0)) + 
              scale_y_continuous(expand = expansion(mult = 0.02), limits = c(-10.5, NA)), 
            mod_marg %>% 
              filter(mod %in% c("pop_offset", "poly2", "country_trend") == FALSE) %>% 
-             # filter(mod %in% mods_shown) %>%
-             # mutate(mod = factor(mod, levels = mods_shown, ordered = T)) %>% 
-             # left_join(mods_shown) %>% 
-             # filter(!is.na(mod_clean)) %>%
-             # filter(x >= 9 & x<= 33) %>% 
              filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
                       x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
              arrange(mod != "main") %>% 
@@ -197,11 +159,6 @@ hist_scale <- 2.75
                         alpha = I(ifelse(mod == "main", 1, 0.8)),
                         group = mod)) + 
              geom_hline(yintercept = 0 + yoff) + 
-             # geom_vline(data = country_temps %>% 
-             #              arrange(mean_temp) %>% 
-             #              mutate(country = factor(country, ordered = T, 
-             #                                      levels = unique(country))),
-             #            aes(xintercept = mean_temp, color = country)) +
              geom_line(aes(color = mod)) +  # aes(color = I(ifelse(mod == "main", "black", "grey")))
              geom_ribbon(data = boot_marg %>%
                            # filter(x >= 9 & x<= 33) %>%
@@ -232,13 +189,7 @@ hist_scale <- 2.75
              scale_color_manual(name = "", 
                                 values = c("grey10",
                                            rep("grey60", 11)),
-                                # MetBrewer::met.brewer("Juarez", 11)
                                 aesthetics = c("color", "fill")) +
-             # scale_color_manual(values = rev(MetBrewer::met.brewer("Hiroshige", 21)),
-             #                    aesthetics = c("color")) +
-             # scale_color_manual(values = c("grey10", "red"),
-             #                               # MetBrewer::met.brewer("Juarez", nrow(mods_shown) - 1)),
-             #                    aesthetics = c("color", "fill")) +
              xlab("temperature (°C)") + ylab("d log(dengue)/d temp") + 
              scale_x_continuous(expand = expansion(mult = 0.0), 
                                 limits = dengue_temp %>% 
@@ -339,9 +290,6 @@ plot_grid(boot_marg %>%
                        fill = col)) + 
             geom_ribbon(alpha = 0.45, color = NA) + 
             geom_line() + 
-            # geom_histogram(data = dengue_temp %>% filter(!is.na(dengue_inc)), 
-            #                aes(x = mean_2m_air_temp_degree1), 
-            #                inherit.aes = FALSE) + 
             geom_hline(yintercept = 0) + 
             facet_wrap(~panel, nrow = 3) + 
             theme_classic() + 
@@ -362,16 +310,6 @@ plot_grid(boot_marg %>%
   ggsave(filename = "./figures/figureS4.png", height = 9, width = 6)
 
 # table S3 with coefficients under different models
-# readRDS("./output/mod_ests/robust_check_coef_vcv.rds") %>% 
-#   purrr::imap(function(x, name){
-#     data.frame(coef = names(x$coef), 
-#                est = x$coef, 
-#                se = diag(x$vcov), 
-#                mod = name) 
-#   }) %>% 
-#   list_rbind() %>% 
-#   View
-
 mod_ests <- readRDS("./output/mod_ests/all_models.rds")
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>% 
   mutate(dengue_inc = dengue_cases/pop, 
@@ -391,17 +329,7 @@ temp_variable_names = rbind(expand.grid(deg = 1:5, lag = 0:4) %>%
                                                        ", ", ifelse(lag > 0, paste0("lag ", lag), "current"))))
 
 etable(
-  # `main spec` = mod_ests[["main"]], 
-  #      unweighted = mod_ests[["no_pop_weight"]],
-  #      `no Brazil` = mod_ests[["no_brazil"]],
-  #      `no precip` = 
-       # , "no precip", "precip^2", "no brazil", 
-       #               "4th order temp", "5th order temp", "lags 1-2", "lags 1-4", 
-       #               "lags 0-3", "country-month-year FE", "unit seasonality"
   mod_ests[which(names(mod_ests) %in% c("pop_offset", "poly2", "country_trend") == FALSE)],
-  #   set_names(c("main spec", "unweighted", "no precip", "precip^2", "no brazil", 
-  #               "4th order temp", "5th order temp", "lags 1-2", "lags 1-4", 
-  #               "lags 0-3", "country-month-year FE", "unit seasonality")), 
   headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no brazil", 
               "temp$^4$", "temp$^5$", "lags 1-2", "lags 1-4",
               "lags 0-3", "country-month\n-year FE", "unit\nseasonality"),
@@ -414,23 +342,9 @@ etable(
   dict = c(temp_variable_names$in_table) %>% set_names(temp_variable_names$in_mod),
   postprocess.tex = function(x){
       gsub("        ", " ", x, fixed = T) %>%
-      # gsub("country-month-year FE", "\\makecell{country-month-\\\\year FE}", ., fixed = T) %>% 
-      # gsub("unit seasonality", "unit\\\\seasonality}", ., fixed = T) %>% 
       gsub("countryFE", "cntryFE", .) %>% 
       gsub("\\centering", "\\tiny \\centering", ., fixed = T)},
   replace = T,
-  # adjustbox = 1.1,
   label = "model_coefs",
   title = "Estimated coefficients from main model and alternative specifications. Only coefficient estimate for temperature covariates are show. Standard errors are shown in parantheses. Unless noted in the model name, all models use population-weights, and linear precipitation controls with the lags of precipitation matching the temperature lags. For the fixed effects, `cntryFE\' indicates country-data source fixed effects (see ``Estimating dengue-temperature responses\").",
   file = "./figures/tableS3_model_coefficients.tex") 
-
-# all marginals with SEs
-# mod_marg %>% 
-#   filter(x >= 10 & x<= 32.5) %>%
-#   ggplot(aes(x = x, y = y, ymax = y + 1.96*se, ymin = y - 1.96*se, 
-#              fill = mod, color = mod)) + 
-#   geom_ribbon(alpha = 0.4, color = NA) + 
-#   geom_line() + 
-#   facet_wrap(~mod) + 
-#   theme_classic()
-# 
