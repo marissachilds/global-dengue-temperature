@@ -4,6 +4,7 @@ library(cowplot)
 library(rnaturalearth)
 library(magrittr)
 
+source("./scripts/00_utilities/setup.R")
 gbd <- readxl::read_excel("./data/Global Burden Disease dataset.xls")  %>% 
   filter(measure == "Incidence") %>% 
   filter(val > 0) %>% 
@@ -67,27 +68,7 @@ map_plot = ggplot(data = world) +
   )
 
 dens_plot = read.csv("./data/endemic_dengue_country_temperatures.csv") %>% 
-  mutate(in_sample = COUNTRY_NA %in% c("Bolivia", 
-                                       "Brazil", 
-                                       "Colombia", 
-                                       "Costa Rica", 
-                                       "Dominican Republic", 
-                                       "Honduras", 
-                                       "Indonesia", 
-                                       "Cambodia", 
-                                       "Laos", 
-                                       "Sri Lanka",
-                                       "Mexico", 
-                                       "Malaysia", 
-                                       "Nicaragua", 
-                                       "Panama", 
-                                       "Peru", 
-                                       "Philippines", 
-                                       "El Salvador",
-                                       "Thailand", 
-                                       "Taiwan", 
-                                       "Venezuela", 
-                                       "Vietnam"),
+  mutate(in_sample = COUNTRY_NA %in% study_countries,
          in_sample = ifelse(in_sample, "study countries", "other endemic countries")) %>% 
   left_join(gbd, by = c("COUNTRY_NA" = "gee_name")) %>% 
   filter(val > 10) %>% 

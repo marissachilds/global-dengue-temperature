@@ -4,12 +4,8 @@ library(rgee)
 library(sf)
 library(maptools)
 
-study_countries = c("Bolivia", "Peru", "Mexico", "Colombia",  "Costa Rica",
-                    "Taiwan", "Brazil", "Honduras", "El Salvador", 
-                    "Lao People's Democratic Republic", "Nicaragua", 
-                    "Venezuela", "Viet Nam", "Dominican Republic", "Indonesia", 
-                    "Panama", "Sri Lanka", "Philippines", "Thailand", 
-                    "Cambodia", "Malaysia")
+study_countries %<>% gsub("Laos", "Lao People's Democratic Republic", .) %>% 
+  gsub("Vietnam", "Viet Nam", .)
 stations <- read_fwf("./data/ghcn_station_data/ghcnd-inventory.txt")
 stations %<>% set_colnames(c("id", "lat", "lon", "var", "start", "end"))
 stations %<>% st_as_sf(coords = c("lon","lat"), remove = FALSE)
