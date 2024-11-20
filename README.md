@@ -7,7 +7,7 @@
 1) Download all shapefiles and simplify PHL shapefile 
 	- Manual downloads 
 	- 00_setup/phl_shp_debug.R
-2) Upload all to earth engine assets (manual)
+2) Upload all shapefiles to earth engine assets 
 3) Transform shapefiles for plotting centered around Pacific Ocean 
 	- 00_setup/transform_shapefiles.R 
 4) Download population data from Google Earth Engine
@@ -15,10 +15,10 @@
 
 ### Current and future temperature data 
 4) Calculate ERA5 climatologies to debias with, upload to earth engine 
-	- 02_era5_climatology.R (00_setup.R with cds user and key)
+	- 02_era5_climatology.R 
 5) Download worldclim climatologies, upload to earth engine
 6) Calculate monthly temperature for relevant periods with debiased ERA5 using earth engine 
-	- 03_extract_temperature_gee_daily.R (00_setup.R with gee username) 
+	- 03_extract_temperature_gee_daily.R  
 7) Calculate temperature change in CMIP6 climatologies, upload to earth engine
 	- 04_select_gcm_climatologies.R -- select which climatologies to use
 	- 05_get_cmip6_climatologies.py -- calculate dT for selected climatologies and save as rasters
@@ -28,6 +28,7 @@
 ### Dengue data 
 
 9) Clean all of the dengue data by country 
+  - Download dengue data by country as described in supplemental table S3
 	- 07_clean_dengue_data
 
 ## Clean and merge data 
