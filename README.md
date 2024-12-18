@@ -1,4 +1,11 @@
-# global-dengue-temperature
+# Reqirements and timing
+All analyses were run in the R (version 4.4.0) or python (version 3.11.5) programming languages. Installing R and python usually takes less than 30 minutes, but may vary. Installing the necessary R packages takes usually 1-2 minutes per package, unless packages are installed from source which takes longer. 
+
+Some scripts (particularly those accompanied by an `.sbatch` file may require relatively large computer memory). Downloading and harmonizing the temperature data can take up to a few days depending on Google Earth Engine. Some of the data access and processing is run through Google Earth Engine and requires an account. Accessing to some ERA5 temperature data to construct climatologies uses the Copernicus Climate Data Store (CDS) which requires a CDS account and API token. The Google Earth Engine and CDS API tokens must be updated in `scripts/00_utilities/setup.R`. 
+
+Running the scripts in the section "Download/extract data" and "Clean and merge data" below will result in cleaned analysis-ready datasets. The scripts in the section "Fit regressions and run projections" rely on those cleaned datasets and will produce the main estimates from the analysis. The scripts in the section "Make figures and tables" then use the main estimates from the previous section to produce the figures and tables presented in the manuscript. 
+
+# Data processing and analysis pipeline
 
 ## Download/extract data 
 
@@ -77,7 +84,6 @@
 1) Set up scripts called by other scripts 
 	- 00_utilities/functions.R
 	- 00_utilities/mat_mult.cpp
-	- 00_utilities/setup_private.R
 	- 00_utilities/setup.R
 2) comparison of ERA5 and worldclim and why we need to debias 
 	- 00_setup/A_temperature_check_download_station_data.R
