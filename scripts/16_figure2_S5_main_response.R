@@ -4,7 +4,7 @@ library(cowplot)
 library(fixest)
 
 # load functions 
-source("./scripts/00_functions.R")
+source("./scripts/00_utilities/functions.R")
 
 # load dengue data 
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>% 
@@ -298,6 +298,7 @@ plot_grid(boot_marg %>%
                                           MetBrewer::met.brewer("Austria", 14)[9:12]),
                                aesthetics = c("color", "fill")) +
             xlab("temperature (°C)") + ylab("d log(dengue)/d temp") + 
+            ylim(-1, 3) + 
             theme(legend.position = "none", 
                   plot.margin = unit(c(15.5, 5.5, 5.5, 5.5), "points"),
                   strip.background = element_blank(),
@@ -309,7 +310,7 @@ plot_grid(boot_marg %>%
           rel_heights = c(0.8, 1)) %>% 
   ggsave(filename = "./figures/figureS4.png", height = 9, width = 6)
 
-# table S3 with coefficients under different models
+# table S1 with coefficients under different models
 mod_ests <- readRDS("./output/mod_ests/all_models.rds")
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>% 
   mutate(dengue_inc = dengue_cases/pop, 
@@ -328,8 +329,9 @@ temp_variable_names = rbind(expand.grid(deg = 1:5, lag = 0:4) %>%
                                      in_table = paste0("precip", ifelse(deg > 1, paste0("$^", deg, "$"), ""), 
                                                        ", ", ifelse(lag > 0, paste0("lag ", lag), "current"))))
 
+cor2_change = readRDS("./output/all_models_change_cor2.rds")
 etable(
-  mod_ests[which(names(mod_ests) %in% c("pop_offset", "poly2", "country_trend") == FALSE)],
+  mod_ests[which(names(mod_ests) %in% c("pop_offset", "country_trend", "poly2") == FALSE)],
   headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no brazil", 
               "temp$^4$", "temp$^5$", "lags 1-2", "lags 1-4",
               "lags 0-3", "country-month\n-year FE", "unit\nseasonality"),
@@ -338,13 +340,16 @@ etable(
   page.width = "fit",
   order = c("temp.*current", "temp.*lag 1", "temp.*lag 2", "temp.*lag 3", "temp.*lag 4", 
             "precip.*lag 1", "precip.*lag 2", "precip.*lag 3", "precip.*lag 4"),
-  se = "cluster", fitstat = c("n", "pr2"),
+  se = "cluster", fitstat = c("n", "cor2"),
   dict = c(temp_variable_names$in_table) %>% set_names(temp_variable_names$in_mod),
   postprocess.tex = function(x){
       gsub("        ", " ", x, fixed = T) %>%
       gsub("countryFE", "cntryFE", .) %>% 
       gsub("\\centering", "\\tiny \\centering", ., fixed = T)},
+  extralines = list("__change in sq. corr" = cor2_change[which(names(cor2_change) %in% c("poly2") == FALSE)]),
+  digits.stats = 4,
   replace = T,
   label = "model_coefs",
   title = "Estimated coefficients from main model and alternative specifications. Only coefficient estimate for temperature covariates are show. Standard errors are shown in parantheses. Unless noted in the model name, all models use population-weights, and linear precipitation controls with the lags of precipitation matching the temperature lags. For the fixed effects, `cntryFE\' indicates country-data source fixed effects (see ``Estimating dengue-temperature responses\").",
   file = "./figures/tableS3_model_coefficients.tex") 
+
