@@ -2,8 +2,10 @@ library(dplyr)
 library(tidyr)
 library(magrittr)
 
+# specify scenarios of interest 
 scenarios = c("historical", 'ssp126', "ssp245", 'ssp370', "hist-nat")
 
+# limit the TCR 
 tcr_range = c(1.4, 2.2)
 
 catalog = read.csv("~/Downloads/pangeo-cmip6.csv")

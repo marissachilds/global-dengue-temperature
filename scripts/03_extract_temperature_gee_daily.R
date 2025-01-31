@@ -17,6 +17,7 @@ if (!dir.exists(download_loc)){
   dir.create(download_loc)
 }
 
+# make lists of the worldclim and ERA5 monthly climatologies
 worldclim_clim <- purrr::map(1:12, 
                              function(m){
                                ee$Image(paste0(ee_worldclim_loc, 
@@ -32,7 +33,6 @@ era5_clim <- purrr::map(1:12,
                                           formatC(m, width=2, flag="0"))) %>% 
                             ee$Image$set("month", m)
                         }) %>% ee$List()
-# eventually will need to figure out what to do with data from July 2020 and on, but lets not worry about that for now 
 
 country_tasks = read.csv("./ref_tables/country_tasks.csv") %>% 
   # PHL is the only one in a different location on earth engine
@@ -48,7 +48,7 @@ country_tasks %<>%
            add(as.difftime(1, units = "days")) %>%
            format("%Y-%m-%d"))
 
-# COL and PHL have trouble running, has out of memory errors, so split it into 4 time spans 
+# COL and PHL have trouble running, has out of memory errors, so split it into 4 time periods 
 country_tasks %<>% 
   mutate(count = case_when(country_shapefile == "COL" ~ 4, 
                            country_shapefile == "PHL" ~ 3, 
@@ -68,6 +68,7 @@ country_tasks %<>%
                               T ~ end_date)) %>% 
   select(-id)
   
+# set up ERA5 and WorldPop data which are stored on earth engine
 era5 <- ee$ImageCollection("ECMWF/ERA5/DAILY")
 era5_proj <- era5$first()$projection()
 era5_scale <- era5_proj$nominalScale()$getInfo()
@@ -135,7 +136,7 @@ country_exports <- country_tasks %>%
         muni_col <- shape$limit(maximum = size, 
                                 opt_property = identifier_col, 
                                 opt_ascending = order)
-        # Map$addLayer(muni_col)
+        
         # print out which part of the shapefile is being operated on
         print(paste0("units with codes/names from ", 
                      muni_col$aggregate_min(identifier_col)$getInfo(), 
@@ -161,7 +162,7 @@ country_exports <- country_tasks %>%
               debias_day = day_im$select("mean_2m_air_temperature") %>% 
                 ee$Image$subtract(era5_clim$get(ee$Number(m)$subtract(1))) %>%
                 ee$Image$add(worldclim_clim$get(ee$Number(m)$subtract(1))) %>%
-                # calculate ^2, ^3, ^4, ^5, ^6
+                # calculate ^2, ^3, ^4, ^5, ^6 powers
                 ee$Image$pow(ee$Image$constant(as.list(1:6))) %>% 
                 ee$Image$rename(paste0("mean_2m_air_temperare_degree", 1:6)) %>% 
                 # also add DTR and precip average bands
@@ -196,6 +197,8 @@ country_exports <- country_tasks %>%
           ee$FeatureCollection() %>%
           ee$FeatureCollection$flatten()
         
+        # export the temperature feature collection to drive, 
+        # only saving the relevant properties to speed things up 
         export_temp_task <- ee_table_to_drive(
           collection = unit_avgs,
           description = paste0(country_shapefile,
@@ -207,6 +210,7 @@ country_exports <- country_tasks %>%
           selectors = export_properties
         )
         
+        # calculate populations in each administrative unit 
         pop <- pop_orig %>% 
           ee$ImageCollection$filter(ee$Filter$calendarRange(mid_year, mid_year, "year")) %>%
           ee$ImageCollection$reduce(ee$Reducer$mean())
@@ -215,7 +219,7 @@ country_exports <- country_tasks %>%
                                                    reducer = ee$Reducer$sum(),
                                                    crs = pop_proj,
                                                    scale = pop_scale)
-        
+        # export population data to drive 
         export_pop_task <- ee_table_to_drive(
           collection = muni_pop,
           description = paste0(country_shapefile,
@@ -226,6 +230,7 @@ country_exports <- country_tasks %>%
           selectors = list(identifier_col, "sum")
         )
         
+        # start export tasks and return the export task information 
         export_temp_task$start()
         export_pop_task$start()
         return(list(export_temp_task,
