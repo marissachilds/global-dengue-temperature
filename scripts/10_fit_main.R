@@ -54,14 +54,6 @@ robust_check <- list(
                              weights =~pop, # population weight
                              data = dengue_temp %>% 
                                filter(country != "BRA")),
-  poly2 = fixest::fepois(dengue_inc ~ 
-                           mean_2m_air_temp_degree1_lag1 + mean_2m_air_temp_degree2_lag1 + 
-                           mean_2m_air_temp_degree1_lag2 + mean_2m_air_temp_degree2_lag2 + 
-                           mean_2m_air_temp_degree1_lag3 + mean_2m_air_temp_degree2_lag3 + 
-                           total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
-                           countryFE^id + countryFE^year + countryFE^month, 
-                         weights =~pop, # population weight 
-                         data = dengue_temp),
   poly4 = fixest::fepois(dengue_inc ~ 
                            mean_2m_air_temp_degree1_lag1 + mean_2m_air_temp_degree2_lag1 + mean_2m_air_temp_degree3_lag1 + mean_2m_air_temp_degree4_lag1 + 
                            mean_2m_air_temp_degree1_lag2 + mean_2m_air_temp_degree2_lag2 + mean_2m_air_temp_degree3_lag2 + mean_2m_air_temp_degree4_lag1 + 
@@ -121,15 +113,8 @@ robust_check <- list(
                                data = dengue_temp))
 
 saveRDS(robust_check, 
-        "./output/all_models.rds")
+        "./output/mod_ests/all_models.rds")
 
-robust_check %>% 
-  purrr::map(function(x){
-    list(coef = coef(x), 
-         vcov = vcov(x, "cluster"))
-  }) %>% saveRDS("./output/robust_check_coef_vcv.rds")
-
-   
 comp_cor2 <- list(
   main = r2(fixest::fepois(dengue_inc ~ 
                              total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
@@ -161,12 +146,6 @@ comp_cor2 <- list(
                                 data = dengue_temp %>% 
                                   filter(country != "BRA")),
                  "cor2"),
-  poly2 = r2(fixest::fepois(dengue_inc ~ 
-                              total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
-                              countryFE^id + countryFE^year + countryFE^month, 
-                            weights =~pop, # population weight 
-                            data = dengue_temp),
-             "cor2"),
   poly4 = r2(fixest::fepois(dengue_inc ~ 
                               total_precipitation_lag1 + total_precipitation_lag2 + total_precipitation_lag3 | 
                               countryFE^id + countryFE^year + countryFE^month, 
@@ -216,4 +195,4 @@ map2_dbl(robust_check,
            r2(x, "cor2") - y
          }) %>% 
   set_names(names(robust_check)) %>% 
-  saveRDS("./output/all_models_change_cor2.rds")
+  saveRDS("./output/mod_ests/all_models_change_cor2.rds")

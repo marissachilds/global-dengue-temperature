@@ -162,12 +162,17 @@ plot_comp2 <- rbind(country %>%
          panel = grepl("_", scenario)) %>% 
   mutate(q_0.975 = ifelse(grepl("_", scenario), 
                           pmin(q_0.975, 2),
-                          pmin(q_0.975, 3))) %>%
-  {ggplot(data = ., aes(x = as.numeric(scenario) + 
-                          -(as.numeric(country)-11)/22 + 
-                          case_when(scenario == "ssp126_ssp370" ~ 0.2, 
-                                    scenario == "ssp370" ~ 0.075,
-                                    T ~ 0), 
+                          pmin(q_0.975, 3.5)),
+         mean_maxed = ifelse(grepl("_", scenario), mean > 2, mean > 3.5),
+         mean = ifelse(grepl("_", scenario), 
+                       pmin(mean, 2),
+                       pmin(mean, 3.5)), 
+         plot_x = as.numeric(scenario) + 
+           -(as.numeric(country)-11)/22 + 
+           case_when(scenario == "ssp126_ssp370" ~ 0.2, 
+                     scenario == "ssp370" ~ 0.075,
+                     T ~ 0)) %>%
+  {ggplot(data = ., aes(x = plot_x, 
                         color = country)) + 
       # add white points to get the 0s to align on the y-axis between panels
       geom_point(data = summarise(.,
@@ -182,7 +187,7 @@ plot_comp2 <- rbind(country %>%
                  aes(x = ifelse(panel, 3, 1), y = value),
                  alpha = 0, color = "white", shape = 2, inherit.aes = FALSE) +
       geom_hline(yintercept = 0, alpha = 0.4) + 
-      geom_point(aes(y = mean)) +
+      geom_point(aes(y = mean, shape = I(ifelse(mean_maxed, 17, 16)))) +
       geom_linerange(aes(ymin = q_0.025,
                          ymax = q_0.975)) +
       facet_wrap(~panel, scales = "free")  + 
@@ -197,9 +202,9 @@ plot_comp2 <- rbind(country %>%
             aes(x = x, y = Inf, label = labs), 
             vjust = 1, size = 3,
             inherit.aes = FALSE) + 
-  scale_x_continuous(breaks = c(1 - (1:22-11)/23, 
-                                2.075 - (1:22-11)/23, 
-                                3.2 - (1:22-11)/23), 
+  scale_x_continuous(breaks = c(1 - (1:22-11)/22, 
+                                2.075 - (1:22-11)/22, 
+                                3.2 - (1:22-11)/22), 
                      expand = expansion(mult = 0.02),
                      labels = country_temps %>% 
                        arrange(desc(mean_temp)) %>% 
@@ -211,11 +216,12 @@ plot_comp2 <- rbind(country %>%
         legend.position = "none",
         strip.background = element_blank(), 
         strip.text = element_blank(),
-        axis.text.x = element_text(angle = 55, hjust = 1, size = 6))}  
+        axis.text.x = element_text(angle = 55, hjust = 1, size = 6)) + 
+  coord_cartesian(clip = "off")}  
 
 # adjust the size of the panels so left is twice as large 
 plot_comp2  %<>% ggplotGrob
-plot_comp2$widths[[5]] <- plot_comp2$widths[[5]]*2
+plot_comp2$widths[[7]] <- plot_comp2$widths[[7]]*2
 
 # combine panels ----
 plot_grid(unit_map + 
@@ -229,7 +235,7 @@ plot_grid(unit_map +
   ggsave(filename = "./figures/figure5.png",
          width = 8, height = 5, bg = "white")
 
-# figure S7: maps of other 2 future scenarios  ---- 
+# figure S12: maps of other 2 future scenarios  ---- 
 {ggplot() + 
     geom_sf(data = continents,
             fill="grey90", colour="grey10") +
@@ -265,10 +271,10 @@ plot_grid(unit_map +
                                     vjust = 1, hjust = 0),
           legend.justification = c("left", "center"),
           legend.position = c(0.57, 0.2))} %>% 
-  ggsave(filename = "./figures/figureS7_projection_maps.png", 
+  ggsave(filename = "./figures/figureS12_projection_maps.png", 
          width = 8, height = 5.5, bg = "white")
 
-# figure S8 estimates with americas vs asia estimates ----
+# figure S13 estimates with americas vs asia estimates ----
 rbind(country %>% 
         select(country, scenario, mod, mean_temp, starts_with("pct_inc")) %>% 
         rename_with(~gsub("pct_inc_dengue_change_", "", .x)), 
@@ -287,6 +293,7 @@ rbind(country %>%
   mutate(continent_tercile = stringr::str_to_sentence(continent_tercile),
          country = factor(country, ordered = T, 
                           levels = unique(country))) %>% 
+  filter(country != "BOL") %>%
   ggplot(aes(x = mean_main, y = mean_het, shape = continent_tercile, 
              color = country)) + 
   geom_abline(slope = 1, intercept = 0, alpha = 0.75) + 
@@ -314,7 +321,7 @@ rbind(country %>%
                                               "ssp126_ssp370" = "difference between\nSSP1-2.6 and SSP3-7.0"))) +
   xlab("projected % change in dengue\nunder main model specification") + 
   ylab("projected % change in dengue\nunder continent-specific model specification") + 
-  scale_color_manual(values = c(MetBrewer::met.brewer("Hiroshige", 21), "grey40"),
+  scale_color_manual(values = c(MetBrewer::met.brewer("Hiroshige", 21)[1:20], "grey40"),
                      guide = "none") +
   scale_x_continuous(labels = scales::percent) + 
   scale_y_continuous(labels = scales::percent) + 
@@ -353,10 +360,10 @@ test <- all_shapes %>%
 # add inset on map with the two models compared
 temp_seq <- seq(0, 40, 0.1)
 
-boot_coef_ests <- rbind(readRDS("./output/mod_ests/main_coef_boot1000.rds") %>% 
+boot_coef_ests <- rbind(readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
                           select(contains("air_temp")) %>% 
                           mutate(het_tercile = "main"), 
-                        readRDS("./output/mod_ests/het_continent_tercile_coef_boot1000.rds") %>% 
+                        readRDS("./output/mod_ests/het_continent_tercile_coef_blockboot1000.rds") %>% 
                           select(contains("air_temp")) %>% 
                           pivot_longer(everything(), 
                                        names_pattern = "continent_tercile(.*):(.*)", 
@@ -401,7 +408,7 @@ boot_marg %>%
   ggplot(aes(x = x, y = ymid, ymax = ymax, ymin = ymin,
              group = mod, color = mod, fill = mod)) +
   geom_hline(yintercept = 0) + 
-  geom_ribbon(color = NA, alpha = 0.5) + 
+  geom_ribbon(color = NA, alpha = 0.4) + 
   geom_line(linewidth = 1.1) + 
   theme_classic() + 
   annotate("text", x = 29.5, y = 0.3, label = "Asia", color = "#90719f", size = 3) + 
@@ -430,7 +437,7 @@ plot_grid(unit_map_het +
           vjust = c(1.5, 0.75),
           labels = c("a) projected change in dengue incidence under SSP3-7.0 with continent-specific estimates", 
                      'b) comparison projected changes with main and continent-specific estimates')) %>% 
-  ggsave(filename = "./figures/figureS8_het_projections.png",
+  ggsave(filename = "./figures/figureS13_het_projections.png",
          width = 8, height = 8, bg = "white")
 
 # SI table ----
@@ -471,5 +478,5 @@ purrr::map(c("ssp126", "ssp245", "ssp370", "hist-nat"), function(x){
   xtable::xtable(., 
                  caption = "Projected percent change in dengue incidence for countries under different climate scenarios. Numbers are mean estimates followed by 95\\% CIs.",
                  label = "country_proj") %>% 
-  print(file = "./figures/table_SX_country_projections.tex", 
+  print(file = "./figures/tableS2_country_projections.tex", 
         include.rownames = FALSE)

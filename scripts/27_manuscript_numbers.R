@@ -18,7 +18,9 @@ readRDS("./data/unit_covariates.rds") %>%
 # results, thermal sensitivity of dengue, temperature of peak ----
 write("\n\nresults, temperature of dengue peak in main model (also in abstract) ----------", 
       out_txt_file, append = T)
-boot_ests <- readRDS("./output/mod_ests/main_coef_boot1000.rds") %>% 
+main_est <- coef(readRDS("./output/mod_ests/all_models.rds")$main)
+boot_ests <- readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
+  rbind(main_est) %>%
   select(contains("temp"))
 temp_seq <- seq(0, 40, 0.01)
 temp_resp_mat <- colnames(boot_ests) %>%
@@ -32,16 +34,17 @@ temp_resp_mat <- colnames(boot_ests) %>%
 boot_resp <- as.matrix(boot_ests) %*% t(temp_resp_mat) %>% 
   set_colnames(paste0("temp_", temp_seq)) %>% 
   as.data.frame() %>% 
-  mutate(boot_id = 1:n()) %>% 
+  mutate(boot_id = c(1:(n()-1), "main")) %>% 
   pivot_longer(!boot_id, names_prefix = "temp_", 
                names_transform = as.numeric,
                names_to = "x", values_to = "y")
 boot_resp %>% 
+  filter(x > 10 & x < 35) %>% 
   filter(y == max(y), 
          .by = boot_id) %>% 
-  summarise(mid = mean(x), 
-            lower = quantile(x, 0.025), 
-            upper = quantile(x, 0.975)) %>% 
+  summarise(mid = x[boot_id == "main"], 
+            lower = quantile(x[boot_id != "main"], 0.025), 
+            upper = quantile(x[boot_id != "main"], 0.975)) %>% 
   write.table(out_txt_file,
               append = TRUE, row.names = FALSE) 
 rm(boot_resp, temp_resp_mat, temp_seq, boot_ests)
@@ -51,9 +54,9 @@ write("\n\nresults, approx effect of +1 C at low temperatures ----------",
       out_txt_file, 
       append = T)
 mod_ests <- readRDS("./output/mod_ests/all_models.rds")
-source("./scripts/00_functions.R")
+source("./scripts/00_utilities/functions.R")
 
-response_est_se(mod_ests$main, "temp", 15:21, NA, FALSE) %>% 
+response_est_se(mod_ests$main, "temp", 15:21, vcov_type = NA, debug = FALSE) %>% 
   select(-se) %>% 
   mutate(y2 = lead(y, 1), 
          y_diff = y2 - y, 
@@ -61,7 +64,6 @@ response_est_se(mod_ests$main, "temp", 15:21, NA, FALSE) %>%
   write.table(out_txt_file,
               append = TRUE, row.names = FALSE) 
 rm(mod_ests)
-
 
 # results, % of units that are in Brazil ----
 write("\n\nresults, % of spatial units in Brazil ----------", 
@@ -150,6 +152,15 @@ readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_s
   write.table(out_txt_file,
               append = TRUE, row.names = FALSE) 
 
+# results, % change in dengue in Bolivia under SSP3-7.0 projections
+write("\n\nresults, Bolivia % change in dengue under SSP3-7.0 projections ----------", 
+      out_txt_file, 
+      append = T)
+readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_ssp370.rds") %>% 
+  filter(country == "BOL") %>% 
+  select(pct_inc_dengue_change_q_0.025, pct_inc_dengue_change_mean, pct_inc_dengue_change_q_0.975) %>% 
+  write.table(out_txt_file,
+              append = TRUE, row.names = FALSE) 
 
 # results, number of people in areas with doubling dengue ----
 write("\n\nresults, number of people (in millions) currently living in places expected to see doubling dengue ----------", 
@@ -245,7 +256,7 @@ rbind(readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scen
 write("\n\nresults, overall change in % change dengue for SSP3-7.0 relative to SSP1-2.6 ----------", 
       out_txt_file, 
       append = T)
-readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_ssp370_minus_ssp126.rds") %>% View
+readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_ssp370_minus_ssp126.rds") %>% 
   filter(country == "overall_pop_weight") %>% 
   select(abs_change_mean, abs_change_q_0.025, abs_change_q_0.975) %>% 
   write.table(out_txt_file,

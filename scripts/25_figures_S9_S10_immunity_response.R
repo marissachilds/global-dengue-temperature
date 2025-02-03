@@ -83,7 +83,7 @@ het_marginals <- purrr::imap(set_names(het_ests, dengue_temp %>% colnames %>% gr
                              function(fixest_mod, mod_name){
   print(mod_name)
   mod_coef = coef(fixest_mod)
-  mod_vcov = vcov(fixest_mod, se = "cluster")
+  mod_vcov = vcov_cluster(fixest_mod, "countryFE")
   terciles <- names(mod_coef) %>% 
     str_split_i("\\:", i = 1) %>%
     unique %>% 
@@ -189,7 +189,7 @@ plot_grid(immunity_hist +
           labels = c("a) distribution of lagged dengue incidence", 
                      "b) varition in immunity proxy within locations"), 
           hjust = 0, label_x = 0.01, vjust = c(1.2, 1.5)) %>% 
-  ggsave(filename = "figures/immunity_quantiles.png", 
+  ggsave(filename = "figures/figureS9_immunity_quantiles.png", 
          width = 6, height = 8)
 
 yoff = 1
@@ -204,8 +204,8 @@ plot_grid(het_marginals %>%
                    mod = gsub("_", " - ", mod), 
                    mod = paste0(mod, " months lagged dengue")) %>% 
             ggplot(aes(x = x, y = y + yoff, 
-                       ymin = pmax(y - 1.96*se, -1) + yoff, 
-                       ymax = pmin(y + 1.96*se, 1.4) + yoff,
+                       ymin = pmax(y + qnorm(0.025)*se, -1) + yoff, 
+                       ymax = pmin(y + qnorm(0.975)*se, 1.5) + yoff,
                        group = interaction(terc, mod), 
                        color = terc, fill = terc)) + 
             geom_line(lwd = 1) + 
@@ -230,7 +230,7 @@ plot_grid(het_marginals %>%
             theme_classic() + 
             theme(plot.margin = unit(c(37.5, 5.5, 5.5, 5.5), "points"),
                   legend.position = "inside", 
-                  legend.position.inside = c(0.22, 0.815),
+                  legend.position.inside = c(0.3, 0.815),
                   legend.background = element_blank(),
                   legend.key.size = unit(0.8, "lines"),
                   legend.text = element_text(size = 7.5),
@@ -264,16 +264,16 @@ plot_grid(het_marginals %>%
                                            .by = c(terc, mod)) %>% 
                             mutate(mod_min = rank(mean_marginal) == 1, 
                                    .by = mod), 
-                          aes(x = 1.85,  
-                              y = mean_marginal + ifelse(mod_min, -0.1, 0.1),
+                          aes(x = 1.75,  
+                              y = mean_marginal + ifelse(mod_min, -0.12, 0.12),
                               label = round(mean_marginal, 2),
                               color = terc)) + 
                 facet_wrap(~mod, ncol = 1) + 
                 scale_color_manual(values = immunity_colors[c(1, 4)],
                                    aesthetics = c("color", "fill")) + 
                 theme_classic() + 
-                # scale_x_continuous(expand = expansion(mult = c(0.02, 0.02))) + 
-                scale_y_continuous(limits = c(-1, 1.4),
+                scale_x_continuous(expand = expansion(mult = c(0, 0.08))) +
+                scale_y_continuous(limits = c(-1, 1.5),
                                    breaks = seq(-0.5, 1.5, by = 0.5),
                                    expand = expansion(mult = 0)) +
                 ylab("d log(dengue)/d temp") +  
@@ -287,5 +287,5 @@ plot_grid(het_marginals %>%
           label_size = 12.5, 
           vjust = c(1.5, 1.2),
           hjust = 0, label_x = c(0.03, -0.03)) %>% 
-  ggsave(filename = "figures/immunity_responses_expanded.png",
+  ggsave(filename = "figures/figureS10_immunity_responses_expanded.png",
          width = 6.5, height = 9)

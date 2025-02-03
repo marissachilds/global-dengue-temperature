@@ -15,7 +15,7 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>%
 
 # load model fits
 mod_ests <- readRDS("./output/mod_ests/all_models.rds")
-boot_ests <- readRDS("./output/mod_ests/main_coef_boot1000.rds") %>% 
+boot_ests <- readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
   select(contains("temp"))
 
 # load temperature data for current period to use for coloring the country lines 
@@ -32,7 +32,10 @@ country_temps <- readRDS("./data/dT_combined/scenarios_era_current_current.gz") 
 temp_seq <- seq(0, 40, 0.1)
 mod_marg <- purrr::imap(mod_ests, 
                          function(x, name){
-                           marginal_est_se(x, "temp", temp_seq, "cluster", FALSE) %>% 
+                           marginal_est_se(coef_name_regex = "temp", x_seq = temp_seq,
+                                           vcov_mat = vcov_cluster(x, "countryFE"),
+                                           coef_vec = coef(x),
+                                           debug = FALSE) %>%
                              mutate(mod = name) %>% 
                              return
                          }) %>% 
@@ -40,7 +43,11 @@ mod_marg <- purrr::imap(mod_ests,
 
 mod_resp <- purrr::imap(mod_ests, 
                         function(x, name){
-                          response_est_se(x, "temp", temp_seq, "cluster", FALSE) %>% 
+                          # response_est_se(x, "temp", temp_seq, "twoway", FALSE) %>% 
+                          response_est_se(coef_name_regex = "temp", x_seq = temp_seq,
+                                          vcov_mat = vcov_cluster(x, "countryFE"),
+                                          coef_vec = coef(x),
+                                          debug = FALSE) %>%
                             mutate(mod = name) %>% 
                             return
                         }) %>% 
@@ -65,7 +72,6 @@ temp_marg_mat <- colnames(boot_ests) %>%
   }) %>% 
   reduce(cbind) 
   
-    
 boot_resp <- as.matrix(boot_ests) %*% t(temp_resp_mat) %>% 
   set_colnames(paste0("temp_", temp_seq)) %>% 
   as.data.frame() %>% 
@@ -94,12 +100,10 @@ yoff <- 0.5
 hist_scale <- 2.75
 
 {plot_grid(mod_resp %>% 
-             filter(mod %in% c("pop_offset", "poly2", "country_trend") == FALSE) %>% 
              filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
                       x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
              mutate(y = y - y[x == temp_mean],
                     .by = mod) %>% 
-             arrange(mod == "main") %>% 
              filter(mod == "main") %>% 
              ggplot(aes(x = x, 
                         y = y,
@@ -119,7 +123,7 @@ hist_scale <- 2.75
                                     x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
                            mutate(y = y - y[x == temp_mean],
                                   .by = boot_id) %>% 
-                           summarise(ymin = quantile(y, 0.025), 
+                           summarise(ymin = pmax(quantile(y, 0.025), -10.5),
                                      ymax = quantile(y, 0.975), 
                                      .by = x),
                          aes(x = x, ymin = ymin, ymax = ymax), 
@@ -146,7 +150,7 @@ hist_scale <- 2.75
              guides(color = guide_legend(override.aes = list(linewidth = 1))) + 
              xlab("temperature (°C)") + ylab("relative log(dengue)") + 
              scale_x_continuous(expand = expansion(mult = 0.0)) + 
-             scale_y_continuous(expand = expansion(mult = 0.02), limits = c(-10.5, NA)), 
+             scale_y_continuous(expand = expansion(mult = 0.0), limits = c(-10.5, NA)), 
            mod_marg %>% 
              filter(mod %in% c("pop_offset", "poly2", "country_trend") == FALSE) %>% 
              filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
@@ -165,9 +169,10 @@ hist_scale <- 2.75
                            filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
                                     x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
                            summarise(ymin = quantile(y, 0.025),
-                                     ymax = quantile(y, 0.975),
+                                     ymax = quantile(y, 0.975), 
                                      .by = x),
-                         aes(x = x, ymin = pmax(ymin, -yoff) + yoff, ymax = ymax + yoff),
+                         aes(x = x, ymin = pmax(ymin, -yoff) + yoff, 
+                             ymax = pmin(ymax, 1.6) + yoff),
                          color = NA, fill = "black",
                          alpha = 0.4, inherit.aes = FALSE) +
              geom_histogram(data = dengue_temp %>% 
@@ -198,7 +203,7 @@ hist_scale <- 2.75
                                   quantile(c(0.01, 0.99))) + 
              scale_y_continuous(labels = function(breaks){breaks - yoff},
                                 breaks = c(-0.5, 0, 0.5, 1, 1.5, 2) + yoff,
-                                expand = expansion(mult = 0.01),
+                                expand = expansion(mult = c(0.01, 0)),
                                 limits = c(0, 1.6 + yoff)) + 
              guides(color=guide_legend(ncol=2)) + 
              theme(legend.position = "none", #c(0.72, 0.87), 
@@ -232,7 +237,7 @@ plot_grid(boot_marg %>%
                                        x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
                               filter(mod == "main") %>% 
                               filter(x >= 10 & x<= 32.5),
-                            aes(x = x, ymin = y - 1.96*se, ymax = y + 1.96*se), 
+                            aes(x = x, ymin = y + qnorm(0.025)*se, ymax = y + qnorm(0.975)*se), 
                             color = NA, fill = "red", alpha = 0.2) + 
                 geom_line(data = boot_marg %>% 
                             filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
@@ -260,7 +265,6 @@ plot_grid(boot_marg %>%
           mod_marg %>%  
             filter(x >= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.01) & 
                      x <= quantile(dengue_temp$mean_2m_air_temp_degree1, 0.99)) %>% 
-            filter(mod %in% c("pop_offset", "poly2", "country_trend") == FALSE) %>% 
             cross_join(., 
                        summarise(., .by = mod) %>% 
                          rename(panel = mod)) %>% 
@@ -280,8 +284,8 @@ plot_grid(boot_marg %>%
                                       "precip_sq" ~ "2nd order precipitation\ncontrol", 
                                       "unit_season" ~ "unit-month FEs")) %>% 
             ggplot(aes(x = x, 
-                       ymin = y - 1.96*se, 
-                       ymax = pmin(y + 1.96*se, 2.6), 
+                       ymin = y + qnorm(0.025)*se, 
+                       ymax = pmin(y + qnorm(0.975)*se, 2.6), 
                        y = y, 
                        alpha = I(ifelse(col == "other", 0.45, 1)),
                        linewidth = I(ifelse(col == "other", 0.6, 1)),
@@ -308,7 +312,7 @@ plot_grid(boot_marg %>%
           labels = c("a) comparison of bootstrapped and analytic confidence intervals",
                      "b) marginal response under different modeling choice"), 
           rel_heights = c(0.8, 1)) %>% 
-  ggsave(filename = "./figures/figureS4.png", height = 9, width = 6)
+  ggsave(filename = "./figures/figureS5_alternative_specs.png", height = 9, width = 6)
 
 # table S1 with coefficients under different models
 mod_ests <- readRDS("./output/mod_ests/all_models.rds")
@@ -329,9 +333,8 @@ temp_variable_names = rbind(expand.grid(deg = 1:5, lag = 0:4) %>%
                                      in_table = paste0("precip", ifelse(deg > 1, paste0("$^", deg, "$"), ""), 
                                                        ", ", ifelse(lag > 0, paste0("lag ", lag), "current"))))
 
-cor2_change = readRDS("./output/all_models_change_cor2.rds")
-etable(
-  mod_ests[which(names(mod_ests) %in% c("pop_offset", "country_trend", "poly2") == FALSE)],
+cor2_change = readRDS("./output/mod_ests/all_models_change_cor2.rds")
+etable(mod_ests,
   headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no brazil", 
               "temp$^4$", "temp$^5$", "lags 1-2", "lags 1-4",
               "lags 0-3", "country-month\n-year FE", "unit\nseasonality"),
@@ -340,16 +343,16 @@ etable(
   page.width = "fit",
   order = c("temp.*current", "temp.*lag 1", "temp.*lag 2", "temp.*lag 3", "temp.*lag 4", 
             "precip.*lag 1", "precip.*lag 2", "precip.*lag 3", "precip.*lag 4"),
-  se = "cluster", fitstat = c("n", "cor2"),
+  se = "cluster", cluster = "countryFE", fitstat = c("n", "cor2"),
   dict = c(temp_variable_names$in_table) %>% set_names(temp_variable_names$in_mod),
   postprocess.tex = function(x){
       gsub("        ", " ", x, fixed = T) %>%
       gsub("countryFE", "cntryFE", .) %>% 
       gsub("\\centering", "\\tiny \\centering", ., fixed = T)},
-  extralines = list("__change in sq. corr" = cor2_change[which(names(cor2_change) %in% c("poly2") == FALSE)]),
+  extralines = list("__change in sq. corr" = cor2_change),
   digits.stats = 4,
   replace = T,
   label = "model_coefs",
   title = "Estimated coefficients from main model and alternative specifications. Only coefficient estimate for temperature covariates are show. Standard errors are shown in parantheses. Unless noted in the model name, all models use population-weights, and linear precipitation controls with the lags of precipitation matching the temperature lags. For the fixed effects, `cntryFE\' indicates country-data source fixed effects (see ``Estimating dengue-temperature responses\").",
-  file = "./figures/tableS3_model_coefficients.tex") 
+  file = "./figures/tableS1_model_coefficients.tex") 
 

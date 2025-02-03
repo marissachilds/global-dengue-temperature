@@ -109,7 +109,8 @@ test <- all_shapes %>%
                          breaks = c(-0.15, 0, 0.15, 0.3, 0.45),
                          na.value = "grey90") + 
     theme(panel.background = element_rect("white", NA), 
-          legend.position = c(0.6, 0.45))} -> unit_map 
+          legend.position = "inside", 
+          legend.position.inside = c(0.6, 0.45))} -> unit_map 
 
 
 # panel b: country changes ---- 
@@ -146,7 +147,7 @@ unit %>%
                      aes(xmax = -pct_inc_dengue_change_q_0.025,
                          xmin = -pmin(pct_inc_dengue_change_q_0.975, 4),
                          y = as.numeric(country) + 0.1), 
-                     linewidth = 1.3) +
+                     linewidth = 1.15) +
     scale_color_manual(values = c("grey40", rev(MetBrewer::met.brewer("Hiroshige", 21))),
                        aesthetics = c("fill", "color")) +
     scale_x_continuous(labels = scales::percent, 
@@ -163,10 +164,8 @@ unit %>%
 
 
 # panel b inset ----
-source("./scripts/00_functions.R")
-
 # load model bootstrap fits
-boot_ests <- readRDS("./output/mod_ests/main_coef_boot1000.rds") %>% 
+boot_ests <- readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
   select(contains("temp"))
 temp_seq <- seq(0, 40, 0.1)
 temp_marg_mat <- colnames(boot_ests) %>%
@@ -251,7 +250,8 @@ gbd_est %>%
   theme(legend.position = "right", 
         text = element_text(size = 9.5),
         legend.key.size = unit(0.8, "lines"),
-        legend.background = element_blank()) -> hist_plot
+        legend.background = element_blank(), 
+        legend.key = element_rect(fill = "transparent")) -> hist_plot
 
 # combine panels ----
 plot_grid(unit_map + 
