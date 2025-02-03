@@ -9,4 +9,4 @@
 
 ml R/4.0.2
 
-Rscript ./scripts/14_dengue_projections.R ./output/mod_ests/het_continent_tercile_coef_boot1000.rds
+Rscript ./scripts/14_dengue_projections.R ./output/mod_ests/het_continent_tercile_coef_blockboot1000.rds

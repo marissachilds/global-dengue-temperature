@@ -21,13 +21,13 @@ if(Sys.getenv('SLURM_JOB_ID') != "" & length(commandArgs(trailingOnly = TRUE)) >
   print(paste0("using ", args[1], " for bootstrapped coefficients"))
   boot_coef_file = args[1]
   mod_name = gsub(".*/", "", boot_coef_file) %>%
-    gsub("_coef_boot.*", "", .)
+    gsub("_coef_blockboot.*", "", .)
   print(paste0("saving output with model name ", mod_name))
 }else{
   # registerDoParallel(cores = 1)
-  boot_coef_file = "./output/mod_ests/main_coef_boot1000.rds"
+  boot_coef_file = "./output/mod_ests/main_coef_blockboot1000.rds"
   mod_name = gsub(".*/", "", boot_coef_file) %>% 
-    gsub("_coef_boot.*", "", .)
+    gsub("_coef_blockboot.*", "", .)
 }
 
 sourceCpp("./scripts/mat_mult.cpp", verbose = FALSE, echo = FALSE)
