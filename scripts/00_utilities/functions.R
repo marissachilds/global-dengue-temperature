@@ -10,7 +10,8 @@ marginal_est_se <- function(mod,
                             vcov_type = "cluster",
                             debug = FALSE,
                             vcov_mat, coef_vec, 
-                            degree_regex = "degree"){
+                            degree_regex = "degree", 
+                            ...){
   if(!missing(mod)){
     if(!missing(coef_vec)) warning("Both model and coefficient vector provided. Using coef(model) by default")
     coef_vec <- coef(mod)
@@ -19,8 +20,8 @@ marginal_est_se <- function(mod,
   }
 
   if(!missing(mod)){
-    if(!missing(vcov_mat)) warning("Both model and variance-covariance matrix provided. Using coef(model) by default.")
-    vcov_mat = mod %>% vcov(vcov = vcov_type)
+    if(!missing(vcov_mat)) warning("Both model and variance-covariance matrix provided. Using vcov(model) by default.")
+    vcov_mat = mod %>% vcov(vcov = vcov_type, ...)
   } else if(missing(mod) & missing(coef_vec)){
     stop("Must specify either model (mod) or variance-covariance matrix (vcov_mat).")
   }
@@ -33,24 +34,31 @@ marginal_est_se <- function(mod,
     as.numeric %>%
     replace_na(1)
   if(debug){print(degs)}
-  coef_vcv <- vcov_mat %>%
-    magrittr::extract(ind, ind)
+  if(!is.na(vcov_type) | !missing(vcov_mat)){
+    coef_vcv <- vcov_mat %>%
+      magrittr::extract(ind, ind)
+  }
   coef_est <- coef_vec %>%
     magrittr::extract(ind)
   est <- coef_est %*% (sapply(degs, function(x)  x*x_seq^(x-1)) %>% t)
-  var <- (sapply(degs, function(x)  x*x_seq^(x-1))) %*% coef_vcv %*% t(sapply(degs, function(x)  x*x_seq^(x-1)))
+  
+  if(!is.na(vcov_type)){
+    var <- (sapply(degs, function(x)  x*x_seq^(x-1))) %*% coef_vcv %*% t(sapply(degs, function(x)  x*x_seq^(x-1)))
+    se <- sqrt(diag(var))
+  } else{se <- NA}
   data.frame(x = x_seq,
              y = est[1,],
-             se = sqrt(diag(var))) %>%
+             se = se) %>%
     return
 }
 
-response_est_se <- function(mod, coef_name_regex,
-                        x_seq,
-                        vcov_type = "cluster",
-                        debug = FALSE, 
-                        vcov_mat, coef_vec, 
-                        degree_regex = "degree"){
+response_est_se <- function(mod, 
+                            coef_name_regex = "",
+                            x_seq,
+                            vcov_type = "cluster",
+                            debug = FALSE, 
+                            vcov_mat, coef_vec, 
+                            degree_regex = "degree", ...){
   if(!missing(mod)){
     if(!missing(coef_vec)) warning("Both model and coefficient vector provided. Using coef(model) by default")
     coef_vec <- coef(mod)
@@ -58,15 +66,13 @@ response_est_se <- function(mod, coef_name_regex,
     stop("Must specify either model (mod) or coefficient vector (coef_vec).")
   }
   
-  if(!missing(mod)){
-    if(!missing(vcov_mat)) warning("Both model and variance-covariance matrix provided. Using coef(model) by default.")
-    vcov_mat = mod %>% vcov(vcov = vcov_type)
+  if(!missing(mod) & !is.na(vcov_type)){
+    if(!missing(vcov_mat)) warning("Both model and variance-covariance matrix provided. Using vcov(model) by default.")
+    vcov_mat = mod %>% vcov(vcov = vcov_type, ...)
   } else if(missing(mod) & missing(coef_vec)){
     stop("Must specify either model (mod) or variance-covariance matrix (vcov_mat).")
   }
-  coef_names <- mod %>%
-    coef %>%
-    names
+  coef_names <- names(coef_vec)
   if(debug){print(coef_names)}
   ind <- which(grepl(coef_name_regex, coef_names))
   if(debug){print(ind)}
@@ -75,13 +81,11 @@ response_est_se <- function(mod, coef_name_regex,
     as.numeric %>%
     replace_na(1)
   if(debug){print(degs)}
-  if(!is.na(vcov_type)){
-    coef_vcv <- mod %>%
-      vcov(vcov = vcov_type) %>%
+  if(!is.na(vcov_type) | !missing(vcov_mat)){
+    coef_vcv <- vcov_mat %>%
       magrittr::extract(ind, ind)
   }
-  coef_est <- mod %>%
-    coef %>%
+  coef_est <- coef_vec %>%
     magrittr::extract(ind)
   est <- coef_est %*% (sapply(degs, function(x)  x_seq^x) %>% t)
   if(!is.na(vcov_type)){
@@ -135,6 +139,22 @@ prep_dengue_data <- function(x){
                        lag3 =~ lag(.x, 3),
                        lag4 =~ lag(.x, 4))), 
            .by = c(country, mid_year, id)) %>% 
+    mutate(dengue_inc = dengue_cases/pop, 
+           countryFE = paste0(country, "_", mid_year),
+           country_id = paste0(country, "_", id)) %>% 
+    return()
+}
+
+prep_dengue_data_noby <- function(x){
+  x %>% 
+    arrange(country, mid_year, id, date) %>% 
+    group_by(country, mid_year, id) %>% 
+    mutate(across(union(contains("temp"), contains("precipitation")), 
+                  list(lag1 =~ lag(.x, 1),
+                       lag2 =~ lag(.x, 2),
+                       lag3 =~ lag(.x, 3),
+                       lag4 =~ lag(.x, 4)))) %>% 
+    ungroup %>% 
     mutate(dengue_inc = dengue_cases/pop, 
            countryFE = paste0(country, "_", mid_year),
            country_id = paste0(country, "_", id)) %>% 
