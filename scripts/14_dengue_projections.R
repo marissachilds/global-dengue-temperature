@@ -2,7 +2,10 @@
 # and save aggregates of the median estimates across model bootstrapped 
 # coefficients and GCMs to use in subsequent analysis/figures.
 # packages for general data manipulation 
-library(tidyverse)
+# library(tidyverse)
+library(dplyr)
+library(stringr)
+library(tidyr)
 library(magrittr)
 library(data.table)
 # ...for faster matrix multiplication 
