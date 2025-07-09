@@ -14,7 +14,8 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>%
   filter(!is.na(dengue_inc))
 
 # load model fits
-mod_ests <- readRDS("./output/mod_ests/all_models.rds")
+# mod_ests <- readRDS("./output/mod_ests/all_models.rds")
+mod_coef_vcv <- readRDS("./output/mod_ests/all_models_vcv_coef.rds")
 boot_ests <- readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
   select(contains("temp"))
 
@@ -30,23 +31,23 @@ country_temps <- readRDS("./data/dT_combined/scenarios_era_current_current.gz") 
             .by = country)
 
 temp_seq <- seq(0, 40, 0.1)
-mod_marg <- purrr::imap(mod_ests, 
+mod_marg <- purrr::imap(mod_coef_vcv, 
                          function(x, name){
                            marginal_est_se(coef_name_regex = "temp", x_seq = temp_seq,
-                                           vcov_mat = vcov_cluster(x, "countryFE"),
-                                           coef_vec = coef(x),
+                                           vcov_mat = x$vcov,
+                                           coef_vec = x$coef,
                                            debug = FALSE) %>%
                              mutate(mod = name) %>% 
                              return
                          }) %>% 
   list_rbind
 
-mod_resp <- purrr::imap(mod_ests, 
+mod_resp <- purrr::imap(mod_coef_vcv, 
                         function(x, name){
                           # response_est_se(x, "temp", temp_seq, "twoway", FALSE) %>% 
                           response_est_se(coef_name_regex = "temp", x_seq = temp_seq,
-                                          vcov_mat = vcov_cluster(x, "countryFE"),
-                                          coef_vec = coef(x),
+                                          vcov_mat = x$vcov,
+                                          coef_vec = x$coef,
                                           debug = FALSE) %>%
                             mutate(mod = name) %>% 
                             return
@@ -193,7 +194,7 @@ hist_scale <- 2.75
              coord_cartesian(clip = "off") +
              scale_color_manual(name = "", 
                                 values = c("grey10",
-                                           rep("grey60", 11)),
+                                           rep("grey60", 12)),
                                 aesthetics = c("color", "fill")) +
              xlab("temperature (°C)") + ylab("d log(dengue)/d temp") + 
              scale_x_continuous(expand = expansion(mult = 0.0), 
@@ -270,6 +271,7 @@ plot_grid(boot_marg %>%
                          rename(panel = mod)) %>% 
             mutate(se = ifelse(mod == panel, se, NA), 
                    col = ifelse(mod == panel, mod, "other")) %>% 
+            filter(panel != "main") %>%
             mutate(panel = case_match(panel, 
                                       "country_mos_FE" ~ "country-month-year\nFEs", 
                                       "lag2" ~ "1 - 2 month lags", 
@@ -282,7 +284,8 @@ plot_grid(boot_marg %>%
                                       "poly4" ~ "4th order polynomial", 
                                       "poly5" ~ "5th order polynomial", 
                                       "precip_sq" ~ "2nd order precipitation\ncontrol", 
-                                      "unit_season" ~ "unit-month FEs")) %>% 
+                                      "unit_season" ~ "unit-month FEs", 
+                                      "lagged_dengue" ~ "lagged dengue")) %>% 
             ggplot(aes(x = x, 
                        ymin = y + qnorm(0.025)*se, 
                        ymax = pmin(y + qnorm(0.975)*se, 2.6), 
@@ -299,7 +302,7 @@ plot_grid(boot_marg %>%
             theme_classic() + 
             scale_color_manual(values = c(MetBrewer::met.brewer("Austria", 14)[1:8],
                                           "grey10",
-                                          MetBrewer::met.brewer("Austria", 14)[9:12]),
+                                          MetBrewer::met.brewer("Austria", 14)[9:13]),
                                aesthetics = c("color", "fill")) +
             xlab("temperature (°C)") + ylab("d log(dengue)/d temp") + 
             ylim(-1, 3) + 
@@ -311,7 +314,7 @@ plot_grid(boot_marg %>%
           label_size = 12,
           labels = c("a) comparison of bootstrapped and analytic confidence intervals",
                      "b) marginal response under different modeling choice"), 
-          rel_heights = c(0.8, 1)) %>% 
+          rel_heights = c(0.7, 1)) %>% 
   ggsave(filename = "./figures/figureS5_alternative_specs.png", height = 9, width = 6)
 
 # table S1 with coefficients under different models
@@ -325,25 +328,29 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>%
 temp_variable_names = rbind(expand.grid(deg = 1:5, lag = 0:4) %>% 
                               mutate(in_mod = paste0("mean_2m_air_temp_degree", deg, ifelse(lag > 0, paste0("_lag", lag), "")), 
                                      in_table = paste0("temp", ifelse(deg > 1, paste0("$^", deg, "$"), ""), 
-                                                       ", ", ifelse(lag > 0, paste0("lag ", lag), "current"))),
+                                                       ", ", ifelse(lag > 0, paste0("lag ", lag), "lag 0"))),
                             expand.grid(deg = 1:2, lag = 0:4) %>% 
                               mutate(in_mod = paste0(ifelse(deg > 1, "I(", ""), 
                                                      "total_precipitation", ifelse(lag > 0, paste0("_lag", lag), ""), 
                                                      ifelse(deg > 1, paste0("^", deg, ")"), "")), 
                                      in_table = paste0("precip", ifelse(deg > 1, paste0("$^", deg, "$"), ""), 
-                                                       ", ", ifelse(lag > 0, paste0("lag ", lag), "current"))))
+                                                       ", ", ifelse(lag > 0, paste0("lag ", lag), "lag 0"))))
 
 cor2_change = readRDS("./output/mod_ests/all_models_change_cor2.rds")
 etable(mod_ests,
-  headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no brazil", 
+  headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no Brazil",
               "temp$^4$", "temp$^5$", "lags 1-2", "lags 1-4",
-              "lags 0-3", "country-month\n-year FE", "unit\nseasonality"),
+              "lags 0-3", "country-\nmonth-\nyear FEs", "unit-\nmonth FEs", 
+              "lagged dengue"),
   tex = T,
-  drop = "precip",
+  drop = c("precip", "dengue"),
   page.width = "fit",
-  order = c("temp.*current", "temp.*lag 1", "temp.*lag 2", "temp.*lag 3", "temp.*lag 4", 
+  order = c("temp.*lag 0", "temp.*lag 1", "temp.*lag 2", "temp.*lag 3", "temp.*lag 4", 
             "precip.*lag 1", "precip.*lag 2", "precip.*lag 3", "precip.*lag 4"),
-  se = "cluster", cluster = "countryFE", fitstat = c("n", "cor2"),
+  # se = "cluster", cluster = "countryFE", 
+  vcov = purrr::map(mod_coef_vcv, ~.x$vcov),
+  fitstat = c("n", "cor2"),
+  depvar = FALSE,
   dict = c(temp_variable_names$in_table) %>% set_names(temp_variable_names$in_mod),
   postprocess.tex = function(x){
       gsub("        ", " ", x, fixed = T) %>%
@@ -353,6 +360,6 @@ etable(mod_ests,
   digits.stats = 4,
   replace = T,
   label = "model_coefs",
-  title = "Estimated coefficients from main model and alternative specifications. Only coefficient estimate for temperature covariates are show. Standard errors are shown in parantheses. Unless noted in the model name, all models use population-weights, and linear precipitation controls with the lags of precipitation matching the temperature lags. For the fixed effects, `cntryFE\' indicates country-data source fixed effects (see ``Estimating dengue-temperature responses\").",
+  title = "Estimated coefficients from main model and alternative specifications. Only coefficient estimate for temperature covariates are shown. Standard errors are shown in parantheses. See ``Specifications of supplemental model\" in the Supplemental Materials for a full list of all model specifications. For the fixed effects, `cntryFE\' indicates country-data source fixed effects (see ``Estimating dengue-temperature responses\").",
   file = "./figures/tableS1_model_coefficients.tex") 
 
