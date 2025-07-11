@@ -232,8 +232,8 @@ plot_grid(unit_map +
           vjust = c(1.5, 0.75),
           labels = c("a) projected change in dengue incidence under SSP3-7.0", 
                      'b) comparison between future scenarios')) %>% 
-  ggsave(filename = "./figures/figure5.png",
-         width = 8, height = 5, bg = "white")
+  ggsave(filename = "./figures/figure5.pdf",
+         width = 8*1.02, height = 5*1.02, bg = "white")
 
 # figure S12: maps of other 2 future scenarios  ---- 
 {ggplot() + 

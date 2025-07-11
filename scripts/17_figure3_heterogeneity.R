@@ -91,36 +91,38 @@ yoff <- 0.75
 hist_scale = 2.05
 y_top <- 1.65
 
-fig3_main <- het_marginals %>%
-  separate_wider_delim(tercile, names = c("panel", "tercile"),
-                       delim = stringr::regex("_(?!.*_)"), too_many = "merge") %>%
-  mutate(tercile = gsub("rank_|tercile", "", tercile)) %>%
-  filter(panel %in% c("dengue") == FALSE) %>% 
+# boot_marg %>%
+#   separate_wider_delim(tercile, names = c("panel", "tercile"),
+#                        delim = stringr::regex("_(?!.*_)"), too_many = "merge") %>%
+#   mutate(tercile = gsub("rank_|tercile", "", tercile)) %>%
+#   filter(panel %in% c("dengue") == FALSE) %>% 
+#   left_join(temp_by_tercile %>% 
+#               summarise(xmax = quantile(x, 0.99), 
+#                         xmin = quantile(x, 0.01), 
+#                         .by = c(tercile, panel))) %>% 
+#   filter(x > xmin & x < xmax) %>%
+#   mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>%
+
+fig3_main <- boot_marg %>% rename(panel = mod) %>% 
+  summarise(upr = quantile(y, 0.975),
+            mid = mean(y),
+            lwr = quantile(y, 0.025),
+            .by = c(x, tercile, panel)) %>% 
+  mutate(tercile = gsub(".*tercile", "", tercile)) %>% 
   left_join(temp_by_tercile %>% 
               summarise(xmax = quantile(x, 0.99), 
                         xmin = quantile(x, 0.01), 
                         .by = c(tercile, panel))) %>% 
-  filter(x > xmin & x < xmax) %>%
-  mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>%
+  filter(x > xmin & x < xmax)%>% 
+  mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>% 
   {ggplot(data = ., 
           aes(x = x, 
-             group = interaction(panel, tercile), 
-             color = tercile, fill = tercile)) + 
-      geom_ribbon(data = boot_marg %>% rename(panel = mod) %>% 
-                    summarise(upr = quantile(y, 0.975),
-                              lwr = quantile(y, 0.025),
-                              .by = c(x, tercile, panel)) %>% 
-                    mutate(tercile = gsub(".*tercile", "", tercile)) %>% 
-                    left_join(temp_by_tercile %>% 
-                                summarise(xmax = quantile(x, 0.99), 
-                                          xmin = quantile(x, 0.01), 
-                                          .by = c(tercile, panel))) %>% 
-                    filter(x > xmin & x < xmax)%>% 
-                    mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)), 
-                  aes(x = x, ymin = pmax(lwr + yoff, 0), 
+              group = interaction(panel, tercile), 
+              color = tercile, fill = tercile)) + 
+      geom_ribbon(aes(x = x, ymin = pmax(lwr + yoff, 0), 
                       ymax = pmin(upr + yoff, y_top + yoff), fill = tercile), 
                   alpha = 0.35, color = NA) + 
-      geom_line(aes(y = pmin(y + yoff, y_top + yoff)), lwd = 1) + 
+      geom_line(aes(y = pmin(mid + yoff, y_top + yoff)), lwd = 1) +
       geom_hline(yintercept = yoff) + 
       geom_density(data = temp_by_tercile %>% mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)), 
                    aes(y = hist_scale*after_stat(density)), 
@@ -152,14 +154,14 @@ fig3_main <- het_marginals %>%
                                             "high", "mid", "low", 
                                             "high", "mid", "low"), 
                                 panel = rep(sort(covars_vec), times = c(2, 3, 3, 3)), 
-                                x = c(17, 17, 
+                                x = c(17, 17.5, 
                                       15, 16.3, 22,
-                                      14, 15, 21.5,
+                                      15, 15, 21.5,
                                       15.25, 14.8, 14), 
                                 y = c(1.05, -0.3, 
-                                      1.25, 0.59, 0.16, 
-                                      1.52, 0.84, 0.37,
-                                      1.4, 0.85, 0.4)), 
+                                      1.15, 0.59, 0.16, 
+                                      1.1, 0.84, 0.37,
+                                      1.2, 0.85, 0.4)), 
               aes(x = x, y = y + yoff, label = tercile, 
                   color = tercile, fontface = "bold"), 
               inherit.aes = FALSE) + 
@@ -176,5 +178,5 @@ fig3_main <- het_marginals %>%
                                      data = data.frame(panel= covar_name),
                                      xmin = 18, xmax=31, ymin= 0.95 + yoff, ymax= 1.7 + yoff)
                 })} %>% 
-  ggsave(filename = "./figures/figure3.png", 
+  ggsave(filename = "./figures/figure3.pdf", 
          width = 8, height = 6)

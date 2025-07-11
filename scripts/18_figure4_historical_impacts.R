@@ -280,7 +280,7 @@ plot_grid(unit_map +
           hjust = 0, label_x = 0.01, label_size = 12, 
           labels = c("a) estimated impact of historical warming (1995 - 2014)", 
                      '')) %>% 
-            ggsave(filename = "./figures/figure4.png", width = 8, height = 5.75, 
+            ggsave(filename = "./figures/figure4.pdf", width = 8*1.05, height = 5.75*1.05, 
                    bg = "white")
           
 

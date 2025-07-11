@@ -5,6 +5,7 @@ library(sf)
 library(cowplot)
 library(biscale)
 library(rworldmap)
+library(ggtext)
 
 shp <- readRDS("./data/shapefiles_plotting.rds")
 continents <- shp$continents 
@@ -108,7 +109,7 @@ finalPlot <- ggdraw() +
                       size = 5) + 
               theme(panel.background = element_rect(fill='transparent'), 
                     plot.margin = unit(c(0, 0, 0, 0), "points")),
-            0.86, 0.56, 0.16, 0.16) + 
+            0.81, 0.61, 0.27, 0.27) + 
   draw_plot(ggplot(country_ts %>% filter(country == "MEX"), 
                    aes(x = date, y = inc)) + 
               geom_line(aes(group = interaction(country, mid_year)),
@@ -122,7 +123,7 @@ finalPlot <- ggdraw() +
                     title = element_text(size = 6),
                     axis.line = element_line(linewidth = 0.4),
                     plot.margin = unit(c(5.5, 0, -2, 3.5), "points")), 
-            0.47, 0.47, 0.2, 0.2) + 
+            0.46, 0.47, 0.2, 0.35) + 
   draw_plot(ggplot(country_ts %>% filter(country == "COL"), 
                    aes(x = date, y = inc)) + 
               geom_line(aes(group = interaction(country, mid_year)),
@@ -135,7 +136,7 @@ finalPlot <- ggdraw() +
                     title = element_text(size = 6),
                     axis.line = element_line(linewidth = 0.4),
                     plot.margin = unit(c(5.5, 0, -2, 3.5), "points")), 
-            0.6, 0.27, 0.2, 0.2) + 
+            0.6, 0.1, 0.2, 0.35) + 
   draw_plot(ggplot(country_ts %>% filter(country == "PHL"), 
                    aes(x = date, y = inc)) + 
               geom_line(aes(group = interaction(country, mid_year)),
@@ -148,7 +149,7 @@ finalPlot <- ggdraw() +
                     axis.title.y = ggtext::element_markdown(),
                     axis.line = element_line(linewidth = 0.4),
                     plot.margin = unit(c(5.5, 0, -4, 3.5), "points")), 
-            0.32, 0.29, 0.2, 0.2) + 
+            0.32, 0.15, 0.2, 0.35) + 
   draw_plot(ggplot(country_ts %>% filter(country == "VNM"), 
                    aes(x = date, y = inc)) + 
               geom_line(aes(group = interaction(country, mid_year)),
@@ -162,7 +163,7 @@ finalPlot <- ggdraw() +
                     axis.title.y = ggtext::element_markdown(),
                     axis.line = element_line(linewidth = 0.4),
                     plot.margin = unit(c(5.5, 0, -4, 3.5), "points")), 
-            0.22, 0.52, 0.2, 0.2)
-ggsave("./figures/figure1_raw.png", 
+            0.22, 0.52, 0.2, 0.35) 
+ggsave("./figures/figure1.pdf", 
        finalPlot, 
-       width = 8, height = 5)
+       width = 8, height = 3)

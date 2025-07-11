@@ -216,10 +216,10 @@ hist_scale <- 2.75
            hjust = 0, label_x = 0.01, label_size = 12, vjust = c(1.5, 0.75),
            align = "v", 
            axis = "lr")} %>% 
-  ggsave(filename = "./figures/figure2.png", width = 4, height = 5)
+  ggsave(filename = "./figures/figure2.pdf", width = 4, height = 5)
 
 
-# figure S4 ----
+# figure S5 ----
 # panel a) other specs, b) bootstrapped + analytic CIs for main
 # compare bootstrapped CIs with analytic
 plot_grid(boot_marg %>% 
@@ -285,7 +285,7 @@ plot_grid(boot_marg %>%
                                       "poly5" ~ "5th order polynomial", 
                                       "precip_sq" ~ "2nd order precipitation\ncontrol", 
                                       "unit_season" ~ "unit-month FEs", 
-                                      "lagged_dengue" ~ "lagged dengue")) %>% 
+                                      "lagged_dengue" ~ "lagged dengue,\nunit trends,\n3rd order precip")) %>% 
             ggplot(aes(x = x, 
                        ymin = y + qnorm(0.025)*se, 
                        ymax = pmin(y + qnorm(0.975)*se, 2.6), 
@@ -305,7 +305,8 @@ plot_grid(boot_marg %>%
                                           MetBrewer::met.brewer("Austria", 14)[9:13]),
                                aesthetics = c("color", "fill")) +
             xlab("temperature (°C)") + ylab("d log(dengue)/d temp") + 
-            ylim(-1, 3) + 
+            # ylim(NA, 3) + 
+            scale_y_continuous(expand = expansion(mult = 0)) + 
             theme(legend.position = "none", 
                   plot.margin = unit(c(15.5, 5.5, 5.5, 5.5), "points"),
                   strip.background = element_blank(),
@@ -314,7 +315,7 @@ plot_grid(boot_marg %>%
           label_size = 12,
           labels = c("a) comparison of bootstrapped and analytic confidence intervals",
                      "b) marginal response under different modeling choice"), 
-          rel_heights = c(0.7, 1)) %>% 
+          rel_heights = c(0.65, 1)) %>% 
   ggsave(filename = "./figures/figureS5_alternative_specs.png", height = 9, width = 6)
 
 # table S1 with coefficients under different models
@@ -341,7 +342,7 @@ etable(mod_ests,
   headers = c("main spec", "unweighted", "no precip", "precip$^2$", "no Brazil",
               "temp$^4$", "temp$^5$", "lags 1-2", "lags 1-4",
               "lags 0-3", "country-\nmonth-\nyear FEs", "unit-\nmonth FEs", 
-              "lagged dengue"),
+              "lagged dengue,\nunit trends,\nprecip$^3$"),
   tex = T,
   drop = c("precip", "dengue"),
   page.width = "fit",
