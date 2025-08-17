@@ -85,8 +85,8 @@ sub_country_dengue <- dengue_temp %>%
   filter(max(nobs) == 12, 
          .by = c(country, mid_year, year)) %>% 
   # average/sum over annual totals
-  summarise(total_dengue = sum(total_dengue, na.rm = T), 
-            avg_annual_inc = mean(total_dengue/pop, na.rm = T),
+  summarise(avg_annual_inc = mean(total_dengue/pop, na.rm = T),
+            total_dengue = sum(total_dengue, na.rm = T), 
             pop = unique(pop),
             .by = c(country, id, mid_year)) %>% 
   mutate(pct_dengue = total_dengue/sum(total_dengue), 
