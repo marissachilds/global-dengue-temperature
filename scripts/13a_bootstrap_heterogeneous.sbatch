@@ -9,4 +9,4 @@
 
 ml R/4.0.2
 
-Rscript ./scripts/13B_bootstrap_heterogeneous.R "pop_per_km2_tercile"
+Rscript ./scripts/13_bootstrap_heterogeneous.R "pop_per_km2_tercile"
