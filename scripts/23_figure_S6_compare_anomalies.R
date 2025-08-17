@@ -95,5 +95,5 @@ dengue_temp %>%
       theme_classic() + 
       theme(strip.background = element_blank(), 
             strip.text = element_text(face = "bold", size = 12))} %>% 
-  ggsave(filename = "./figures/figureSX_anomalies_comparison.png", 
+  ggsave(filename = "./figures/figureS6_anomalies_comparison.png", 
          width = 9, height = 7)

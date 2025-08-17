@@ -78,7 +78,7 @@ het_ests <- dengue_temp %>% colnames %>% grep("^dengue_lag_.*_tercile",., value 
                    data = dengue_temp) %>% 
       return
   })
-temp_seq = round(seq(0, 50, by = 0.001), 3)
+temp_seq = round(seq(0, 50, by = 0.01), 3)
 het_marginals <- purrr::imap(set_names(het_ests, dengue_temp %>% colnames %>% grep("^dengue_lag_.*_tercile",., value = T)), 
                              function(fixest_mod, mod_name){
   print(mod_name)

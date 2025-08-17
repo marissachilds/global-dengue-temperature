@@ -268,5 +268,6 @@ write("\n\nresults, largest % change in dengue for SSP3-7.0 relative to SSP1-2.6
       append = T)
 readRDS("./output/projection_ests/country_changes_maxBoot100_mod_main_scenario_ssp370_minus_ssp126.rds") %>% 
   pull(abs_change_mean) %>% 
+  multiply_by(100) %>%
   write(out_txt_file,
         append = TRUE) 

@@ -14,7 +14,6 @@ dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>%
   filter(!is.na(dengue_inc))
 
 # load model fits
-# mod_ests <- readRDS("./output/mod_ests/all_models.rds")
 mod_coef_vcv <- readRDS("./output/mod_ests/all_models_vcv_coef.rds")
 boot_ests <- readRDS("./output/mod_ests/main_coef_blockboot1000.rds") %>% 
   select(contains("temp"))

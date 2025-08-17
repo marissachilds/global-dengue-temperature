@@ -91,18 +91,6 @@ yoff <- 0.75
 hist_scale = 2.05
 y_top <- 1.65
 
-# boot_marg %>%
-#   separate_wider_delim(tercile, names = c("panel", "tercile"),
-#                        delim = stringr::regex("_(?!.*_)"), too_many = "merge") %>%
-#   mutate(tercile = gsub("rank_|tercile", "", tercile)) %>%
-#   filter(panel %in% c("dengue") == FALSE) %>% 
-#   left_join(temp_by_tercile %>% 
-#               summarise(xmax = quantile(x, 0.99), 
-#                         xmin = quantile(x, 0.01), 
-#                         .by = c(tercile, panel))) %>% 
-#   filter(x > xmin & x < xmax) %>%
-#   mutate(tercile = ifelse(tercile %in% c("asia", "americas"), str_to_title(tercile), tercile)) %>%
-
 fig3_main <- boot_marg %>% rename(panel = mod) %>% 
   summarise(upr = quantile(y, 0.975),
             mid = mean(y),

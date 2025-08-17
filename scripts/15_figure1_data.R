@@ -26,8 +26,6 @@ all_shapes %<>% filter(country != "LKA1") %>%
                          .default = id)) 
 test <- all_shapes %>% st_simplify(dTolerance = 5000)
 
-# saveRDS(all_shapes, "./data/all_shapes_merged.rds")
-
 dengue_temp <- readRDS("./data/dengue_temp_full.rds") %>% 
   mutate(dengue_inc = dengue_cases/pop) 
 

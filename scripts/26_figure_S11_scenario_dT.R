@@ -75,5 +75,5 @@ test %>%
       theme_classic() + 
       theme(strip.background = element_blank(), 
             strip.text = element_text(face = "bold"))} %>% 
-  ggsave(filename = "./figures/figureSX_dT_scenario.png", 
+  ggsave(filename = "./figures/figureS11_dT_scenario.png", 
          width = 7, height = 5)
